@@ -15,6 +15,13 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tape6 --flags FO",
+    "test:bun": "tape6-bun --flags FO",
+    "test:deno": "tape6-deno --flags FO"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "tape-six": "^1.7.12",
+    "typescript": "^6.0.2"
   }
 }
