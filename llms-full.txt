@@ -1,0 +1,44 @@
+# double-meh
+
+> <!-- TODO: Replace with actual project description -->
+> HTTP I/O. A lightweight, zero-dependency micro-package. Works with Node.js and Bun. Supports both CommonJS and ESM consumers.
+
+## Quick start
+
+Install:
+
+```bash
+npm i double-meh
+```
+
+<!-- TODO: Replace with actual quick start example -->
+
+```js
+import doubleMeh from 'double-meh';
+```
+
+## Importing
+
+<!-- TODO: Add import examples once modules are added -->
+
+```js
+// ESM (default export)
+import doubleMeh from 'double-meh';
+
+// CommonJS
+const doubleMeh = require('double-meh');
+```
+
+## API
+
+<!-- TODO: Document the full public API as modules are added -->
+
+## Common patterns
+
+<!-- TODO: Add common usage patterns as the library develops -->
+
+## Links
+
+- Docs: https://github.com/uhop/double-meh/wiki
+- npm: https://www.npmjs.com/package/double-meh
+- Repository: https://github.com/uhop/double-meh

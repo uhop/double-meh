@@ -1,0 +1,26 @@
+# double-meh
+
+> <!-- TODO: Replace with actual project description -->
+> HTTP I/O. A lightweight, zero-dependency micro-package.
+
+## Install
+
+npm i double-meh
+
+## Quick start
+
+<!-- TODO: Replace with actual quick start example -->
+
+```js
+import doubleMeh from 'double-meh';
+```
+
+## API
+
+<!-- TODO: Document the public API as modules are added -->
+
+## Links
+
+- Docs: https://github.com/uhop/double-meh/wiki
+- npm: https://www.npmjs.com/package/double-meh
+- Full LLM reference: https://github.com/uhop/double-meh/blob/master/llms-full.txt

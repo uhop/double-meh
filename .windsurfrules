@@ -1,0 +1,56 @@
+<!-- Canonical source: AGENTS.md — keep this file in sync -->
+# double-meh — AI Agent Rules
+
+## Project identity
+
+<!-- TODO: Replace with actual project description -->
+double-meh — HTTP I/O. A lightweight, zero-dependency micro-package. The npm package name is `double-meh`.
+
+## Critical rules
+
+- **ESM.** The project is `"type": "module"`. Use `import`/`export` in all files.
+- **No transpilation.** Code runs directly.
+- **No runtime dependencies.** Never add packages to `dependencies`. Only `devDependencies` are allowed.
+- **Do not modify or delete test expectations** without understanding why they changed.
+- **Do not add comments or remove comments** unless explicitly asked.
+- **Keep `.js` and `.d.ts` files in sync** for all modules under `src/`.
+
+## Code style
+
+- Prettier: 100 char width, single quotes, no bracket spacing, no trailing commas, arrow parens "avoid" (see `.prettierrc`).
+- 2-space indentation.
+- Semicolons are enforced by Prettier (default `semi: true`).
+
+## Architecture quick reference
+
+<!-- TODO: Replace with actual architecture once modules are added -->
+
+- Entry point: `src/index.js`
+- Tests: `tests/test-*.*js`, `tests/test-*.*ts`
+- Wiki docs: `wiki/` (git submodule)
+
+## Verification commands
+
+- `npm test` — run the full test suite (parallel workers)
+- `node tests/test-<name>.mjs` — run a single test file directly
+- `npm run test:bun` — run with Bun
+- `npm run test:deno` — run with Deno
+- `npm run test:seq` — run sequentially (also `test:seq:bun`, `test:seq:deno`)
+- `npm run ts-check` — TypeScript type checking
+- `npm run ts-test` — TypeScript tests (also `ts-test:bun`, `ts-test:deno`)
+- `npm run lint` — Prettier check
+- `npm run lint:fix` — Prettier write
+
+## File layout
+
+<!-- TODO: Update with actual file layout once modules are added -->
+
+- Entry point: `src/index.js`
+- Tests: `tests/test-*.*js`, `tests/test-*.*ts`
+- Wiki docs: `wiki/` (git submodule)
+
+## When reading the codebase
+
+- Start with `ARCHITECTURE.md` for the module map and dependency graph.
+- Wiki markdown files in `wiki/` contain detailed usage docs.
+- `src/index.js` is the main entry point — read it first.

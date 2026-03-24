@@ -13,13 +13,47 @@
   "license": "BSD-3-Clause",
   "author": "Eugene Lazutkin <eugene.lazutkin@gmail.com> (https://www.lazutkin.com/)",
   "type": "module",
-  "main": "index.js",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": "./src/index.js",
+    "./*": "./src/*"
+  },
   "scripts": {
     "test": "tape6 --flags FO",
     "test:bun": "tape6-bun --flags FO",
-    "test:deno": "tape6-deno --flags FO"
+    "test:deno": "tape6-deno --flags FO",
+    "test:seq": "tape6-seq --flags FO",
+    "test:seq:bun": "bun run `tape6-seq --self` --flags FO",
+    "test:seq:deno": "deno run -A `tape6-seq --self` --flags FO",
+    "ts-check": "tsc --noEmit",
+    "ts-test": "tape6 --flags FO 'tests/test-*.*ts'",
+    "ts-test:bun": "tape6-bun --flags FO 'tests/test-*.*ts'",
+    "ts-test:deno": "tape6-deno --flags FO 'tests/test-*.*ts'",
+    "lint": "prettier --check .",
+    "lint:fix": "prettier --write ."
+  },
+  "keywords": [
+    "http",
+    "io",
+    "lightweight",
+    "zero-dependency"
+  ],
+  "funding": "https://github.com/sponsors/uhop",
+  "files": [
+    "src",
+    "LICENSE",
+    "README.md",
+    "llms.txt",
+    "llms-full.txt"
+  ],
+  "tape6": {
+    "tests": [
+      "/tests/test-*.*js"
+    ]
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "prettier": "^3.8.1",
     "tape-six": "^1.7.12",
     "typescript": "^6.0.2"
