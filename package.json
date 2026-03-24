@@ -1,0 +1,20 @@
+{
+  "name": "double-meh",
+  "version": "1.0.0",
+  "description": "HTTP I/O",
+  "homepage": "https://github.com/uhop/double-meh#readme",
+  "bugs": {
+    "url": "https://github.com/uhop/double-meh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/uhop/double-meh.git"
+  },
+  "license": "BSD-3-Clause",
+  "author": "Eugene Lazutkin <eugene.lazutkin@gmail.com> (https://www.lazutkin.com/)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
