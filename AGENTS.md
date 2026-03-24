@@ -1,6 +1,7 @@
 # AGENTS.md — double-meh
 
 > <!-- TODO: Replace with actual project description -->
+>
 > `double-meh` — HTTP I/O. A lightweight, zero-dependency micro-package.
 
 For project structure, module dependencies, and the architecture overview see [ARCHITECTURE.md](./ARCHITECTURE.md).
