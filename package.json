@@ -55,7 +55,7 @@
   "devDependencies": {
     "@types/node": "^25.5.0",
     "prettier": "^3.8.1",
-    "tape-six": "^1.7.12",
+    "tape-six": "^1.7.14",
     "typescript": "^6.0.2"
   }
 }
