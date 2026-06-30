@@ -25,7 +25,8 @@ npm install
 - **Test (Deno):** `npm run test:deno`
 - **Test (sequential):** `npm run test:seq` (also `test:seq:bun`, `test:seq:deno`)
 - **Test (single file):** `node tests/test-<name>.mjs`
-- **TypeScript check:** `npm run ts-check`
+- **TypeScript check (`.d.ts`/`.mts` contracts):** `npm run ts-check`
+- **JS implementation check (`checkJs` over `src/`):** `npm run js-check`
 - **TypeScript tests:** `npm run ts-test` (also `ts-test:bun`, `ts-test:deno`)
 - **Lint:** `npm run lint` (Prettier check)
 - **Lint fix:** `npm run lint:fix` (Prettier write)

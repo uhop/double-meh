@@ -1,0 +1,42 @@
+import io from './io.js';
+import {fetchTransport} from './transports/fetch.js';
+import {installEvents} from './events.js';
+import {installTrack} from './services/track.js';
+import {installCache} from './services/cache.js';
+import {installRetry} from './services/retry.js';
+import {installMock} from './services/mock.js';
+import {installHelpers} from './helpers.js';
+import {installCodeForward} from './code-forward.js';
+
+io.registerTransport('fetch', fetchTransport);
+io.defaultTransport = fetchTransport;
+
+installEvents(io);
+installTrack(io);
+io.track.attach();
+installCache(io);
+io.cache.attach();
+installRetry(io);
+io.retry.attach();
+installMock(io);
+installHelpers(io);
+installCodeForward(io);
+
+export default io;
+export const get = io.get;
+export const head = io.head;
+export const post = io.post;
+export const put = io.put;
+export const patch = io.patch;
+export const del = io.del;
+export const remove = io.remove;
+export const options = io.options;
+export const full = io.full;
+export const adopt = io.adopt;
+export const track = io.track;
+export const cache = io.cache;
+export const retry = io.retry;
+export const mock = io.mock;
+export const update = io.update;
+export {installCodeForward} from './code-forward.js';
+export {FailedIO, BadStatus, TimedOut} from './envelope.js';
