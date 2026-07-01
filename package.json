@@ -32,7 +32,8 @@
     "ts-test:bun": "tape6-bun --flags FO 'tests/test-*.*ts'",
     "ts-test:deno": "tape6-deno --flags FO 'tests/test-*.*ts'",
     "lint": "prettier --check .",
-    "lint:fix": "prettier --write ."
+    "lint:fix": "prettier --write .",
+    "wiki:index": "wiki-search-index --wiki wiki --repo uhop/double-meh --file README.md"
   },
   "keywords": [
     "http",
@@ -57,6 +58,7 @@
     "@types/node": "^26.0.1",
     "prettier": "^3.9.4",
     "tape-six": "^1.11.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wiki-search-index": "^0.2.0"
   }
 }
