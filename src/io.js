@@ -178,7 +178,8 @@ const prepare = options => {
 
 const dispatch = (request, ctx) => {
   const transport = io.transports[ctx.options.transport] || io.defaultTransport;
-  if (!transport) return Promise.reject(new FailedIO('No transport configured', null, ctx.options));
+  if (!transport)
+    return Promise.reject(new FailedIO('No transport configured', undefined, ctx.options));
   let next = () => Promise.resolve(transport(request, ctx));
   for (const service of io.services) {
     const downstream = next;
@@ -222,7 +223,7 @@ const execute = async (request, ctx) => {
     response = await dispatch(request, ctx);
   } catch (error) {
     if (error instanceof FailedIO) throw error;
-    throw new FailedIO((error && error.message) || 'Failed I/O', null, ctx.options);
+    throw new FailedIO((error && error.message) || 'Failed I/O', undefined, ctx.options);
   }
   return finalize(response, ctx, request.url);
 };
@@ -236,10 +237,12 @@ const run = async rawOptions => {
   }
   const ctx = {options, key: requestKey(request.method, request.url)};
   if (io.track && io.track.active && io.track.optIn(options)) {
-    const existing = io.track.deferred[ctx.key];
-    if (existing) return existing.promise;
     const entry = io.track.flyByKey(ctx.key);
-    execute(request, ctx).then(entry.resolve, entry.reject);
+    if (options.wait) return entry.promise; // register interest; never fires a request
+    if (!entry.flying) {
+      entry.flying = true;
+      execute(request, ctx).then(entry.resolve, entry.reject);
+    }
     return entry.promise;
   }
   return execute(request, ctx);

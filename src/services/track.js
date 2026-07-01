@@ -27,6 +27,7 @@ export const installTrack = io => {
 
   const optIn = options => {
     if (options.stream) return false;
+    if (options.wait) return true;
     if (options.track === false) return false;
     if (options.track === true) return true;
     if (options.transport) return false;
@@ -53,6 +54,7 @@ export const installTrack = io => {
   io.adopt = (target, source) => {
     const options = typeof target === 'string' ? {url: target} : target;
     const entry = flyByKey(io.makeKey(options));
+    entry.flying = true; // adopt fulfills the deferred; a real request must not also fire
     Promise.resolve(source)
       .then(async response => {
         const method = (options.method || 'GET').toUpperCase();

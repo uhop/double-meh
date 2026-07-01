@@ -110,7 +110,7 @@ export class FailedIO extends Error {
   constructor(message, response, options) {
     super(message || 'Failed I/O');
     this.name = this.constructor.name;
-    this.response = response || null;
+    this.response = response;
     this.options = options;
   }
 }

@@ -1,12 +1,5 @@
 export type Method =
-  | 'GET'
-  | 'HEAD'
-  | 'POST'
-  | 'PUT'
-  | 'PATCH'
-  | 'DELETE'
-  | 'OPTIONS'
-  | (string & {});
+  'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | (string & {});
 
 export type HeaderValue = string | string[];
 export type HeaderDict = Record<string, HeaderValue>;
@@ -19,6 +12,7 @@ export interface Options {
   headers?: HeaderDict;
   signal?: AbortSignal;
   transport?: string;
+  fetch?: Omit<RequestInit, 'method' | 'headers' | 'body' | 'signal'>;
   accept?: string;
   as?:
     | 'merge-patch'
@@ -231,9 +225,7 @@ export interface Retry {
 }
 
 export type MockMatcher =
-  | string
-  | RegExp
-  | ((request: PreparedRequest, ctx: RequestContext) => boolean);
+  string | RegExp | ((request: PreparedRequest, ctx: RequestContext) => boolean);
 export type MockCallback = (request: PreparedRequest, ctx: RequestContext) => unknown;
 
 export interface Mock {

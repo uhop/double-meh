@@ -10,16 +10,17 @@ export declare function defineEnvelope<T extends object>(
 export declare function makeEnvelope(response: Response, data: unknown, baseUrl?: string): Envelope;
 
 export declare class FailedIO extends Error {
-  response: Response | null;
+  response: Response | undefined;
   options?: Options;
-  constructor(message?: string, response?: Response | null, options?: Options);
+  constructor(message?: string, response?: Response, options?: Options);
 }
 
 export declare class TimedOut extends FailedIO {
-  constructor(response?: Response | null, options?: Options);
+  constructor(response?: Response, options?: Options);
 }
 
 export declare class BadStatus extends FailedIO {
+  response: Response;
   data: unknown;
   status: number;
   ok: boolean;

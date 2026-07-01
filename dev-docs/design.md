@@ -110,8 +110,10 @@ adds work — and never on bare `io.get`, where it would flip the return type.)
 
 ## The response envelope
 
-The single response contract — returned by every `io.full.*` call **and** carried by every thrown
-error (so success and failure are read the same way).
+The single response contract — returned by every `io.full.*` call **and** carried by a thrown
+`BadStatus` (so a non-2xx failure reads the same way as a success). Transport failures
+(`FailedIO` / `TimedOut`) are the exception: no HTTP response arrived, so they carry only `.response`
+(possibly `undefined`) and `.options`, not the envelope.
 
 ```js
 const envelope = {
@@ -142,9 +144,11 @@ _parsing_, not just raw passthrough. Everything else stays on `headers[...]` / `
 **Lazy getters** reconcile "rich" with "cheap": destructuring `const {data, etag} = env` parses only
 `etag`; `links`/`retryAfter` cost nothing untouched. The shape is still fixed (all keys present).
 
-**Errors share the envelope.** A thrown `BadStatus` carries `status`, `headers`, `response`, `etag`,
-and `data` = the parsed `problem+json` — so `catch (e) { e.status; e.data.detail }` works identically
-to a success envelope. This is the article's "one-place error handling" landing as a shape.
+**A failed-status error _is_ the envelope.** A thrown `BadStatus` carries `status`, `headers`,
+`response`, `etag`, and `data` = the parsed `problem+json` — so `catch (e) { e.status; e.data.detail }`
+works identically to a success envelope. Transport failures (`FailedIO` / `TimedOut`) have no response
+to model, so guard with `instanceof io.BadStatus` before reading envelope fields. This is the
+article's "one-place error handling" landing as a shape.
 
 **`serverTiming` caveats:** it is the lone observability (not control-flow) member. The browser
 surfaces `Server-Timing` mainly via `PerformanceServerTiming`, and the raw header is often not
