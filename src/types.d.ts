@@ -20,7 +20,19 @@ export interface Options {
   signal?: AbortSignal;
   transport?: string;
   accept?: string;
-  as?: 'merge-patch' | 'json-patch' | (string & {});
+  as?:
+    | 'merge-patch'
+    | 'json-patch'
+    | 'json'
+    | 'ndjson'
+    | 'jsonl'
+    | 'text'
+    | 'csv'
+    | 'html'
+    | 'xml'
+    | 'form'
+    | 'octet'
+    | (string & {});
   ifMatch?: string;
   ifNoneMatch?: string;
   fields?: string[];
@@ -140,6 +152,25 @@ export interface FullNamespace extends FullVerbs {
   (url: Target, data?: unknown, options?: Overrides): Promise<Envelope>;
 }
 
+export interface StreamNamespace {
+  get(url: Target, data?: unknown, options?: Overrides): Promise<ReadableStream>;
+}
+
+export interface StreamDuplex {
+  readable: ReadableStream;
+  writable: WritableStream;
+  response: Promise<Envelope>;
+}
+
+export type StreamVerb = (url: Target, options?: Overrides) => StreamDuplex;
+
+export interface Ios {
+  (options: Options): StreamDuplex;
+  put: StreamVerb;
+  post: StreamVerb;
+  patch: StreamVerb;
+}
+
 export interface Deferred<T> {
   promise: Promise<T>;
   resolve(value: T): void;
@@ -217,6 +248,7 @@ export interface Mock {
 export interface IO extends Verbs {
   (url: Target, data?: unknown, options?: Overrides): Promise<unknown>;
   full: FullNamespace;
+  stream: StreamNamespace;
   track: Track;
   cache: Cache;
   retry: Retry;
@@ -237,6 +269,7 @@ export interface IO extends Verbs {
   dataProcessors: DataProcessor[];
   mimeProcessors: MimeProcessor[];
   services: Service[];
+  mimeTypes: Record<string, string>;
 
   registerTransport(name: string, transport: Transport): IO;
   inspect: {

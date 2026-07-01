@@ -2,6 +2,8 @@ import type {
   IO,
   Verb,
   FullNamespace,
+  StreamNamespace,
+  Ios,
   Track,
   Cache,
   Retry,
@@ -23,6 +25,8 @@ export const del: Verb;
 export const remove: Verb;
 export const options: Verb;
 export const full: FullNamespace;
+export const stream: StreamNamespace;
+export const ios: Ios;
 export const track: Track;
 export const cache: Cache;
 export const retry: Retry;

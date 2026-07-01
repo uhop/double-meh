@@ -48,6 +48,19 @@ io.responseInspectors = [];
 io.dataProcessors = [];
 io.mimeProcessors = [];
 io.services = [];
+io.mimeTypes = {
+  'merge-patch': 'application/merge-patch+json',
+  'json-patch': 'application/json-patch+json',
+  json: 'application/json',
+  ndjson: 'application/x-ndjson',
+  jsonl: 'application/x-ndjson',
+  text: 'text/plain',
+  csv: 'text/csv',
+  html: 'text/html',
+  xml: 'application/xml',
+  form: 'application/x-www-form-urlencoded',
+  octet: 'application/octet-stream'
+};
 io.full = (url, data, opts) => run(buildOptions(url, data, opts));
 
 io.registerTransport = (name, transport) => {
@@ -90,14 +103,9 @@ io.detach = name => {
 };
 
 const contentTypeFor = as => {
-  switch (as) {
-    case 'merge-patch':
-      return 'application/merge-patch+json';
-    case 'json-patch':
-      return 'application/json-patch+json';
-    default:
-      return undefined;
-  }
+  if (typeof as !== 'string' || !as) return undefined;
+  // registry alias wins; otherwise a media-type string (has '/') passes through verbatim
+  return io.mimeTypes[as] || (as.indexOf('/') >= 0 ? as : undefined);
 };
 
 const applyHeaders = (headers, init) => {
@@ -139,6 +147,9 @@ const isWellKnownBody = data =>
     (data instanceof ArrayBuffer || ArrayBuffer.isView(data))) ||
   (typeof ReadableStream !== 'undefined' && data instanceof ReadableStream);
 
+const isReadableStream = data =>
+  data != null && typeof data === 'object' && typeof data.getReader === 'function';
+
 const encodeBody = (options, headers) => {
   const method = (options.method || 'GET').toUpperCase();
   if (readVerbs[method] || options.data === undefined) return undefined;
@@ -147,6 +158,8 @@ const encodeBody = (options, headers) => {
     if (processor.match(data, options)) return processor.encode(data, headers, options);
   }
   if (typeof data === 'string' || isWellKnownBody(data)) return data;
+  // a chain/duplex ({readable, writable}) streams its readable side as the body
+  if (data && isReadableStream(data.readable)) return data.readable;
   if (typeof data === 'object') {
     if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     return JSON.stringify(data);
@@ -249,6 +262,10 @@ for (const name of verbNames) {
 io.del = io.remove = io.delete;
 io.full.del = io.full.remove = io.full.delete;
 
+io.stream = {
+  get: (url, data, opts) => io.get(url, data, {...opts, stream: true})
+};
+
 io.run = run;
 io.request = run;
 io.makeVerb = makeVerb;
@@ -263,4 +280,31 @@ io.FailedIO = FailedIO;
 io.BadStatus = BadStatus;
 io.TimedOut = TimedOut;
 
+// ios: request-body streaming for writes. A duplex whose `writable` is the upload
+// (streamed up, duplex:'half') and whose `readable` is the streamed response; no
+// data arg (the body arrives through the pipe). Non-2xx errors the readable.
+const streamDuplex = options => {
+  const reqSide = new TransformStream();
+  const resSide = new TransformStream();
+  options.data = reqSide.readable;
+  options.stream = true;
+  const response = run(options);
+  response.then(
+    envelope => {
+      const body = envelope.data;
+      (body ? body.pipeTo(resSide.writable) : resSide.writable.close()).catch(() => {});
+    },
+    error => resSide.writable.abort(error).catch(() => {})
+  );
+  return {writable: reqSide.writable, readable: resSide.readable, response};
+};
+
+const ios = /** @type {any} */ (
+  options => streamDuplex(buildOptions(options, undefined, undefined, options.method))
+);
+for (const name of ['PUT', 'POST', 'PATCH']) {
+  ios[name.toLowerCase()] = (url, opts) => streamDuplex(buildOptions(url, undefined, opts, name));
+}
+
 export default io;
+export {ios};

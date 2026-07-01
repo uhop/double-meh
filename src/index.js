@@ -38,5 +38,7 @@ export const cache = io.cache;
 export const retry = io.retry;
 export const mock = io.mock;
 export const update = io.update;
+export const stream = io.stream;
+export {ios} from './io.js';
 export {installCodeForward} from './code-forward.js';
 export {FailedIO, BadStatus, TimedOut} from './envelope.js';
