@@ -229,8 +229,21 @@ multi-value). `url\`\`` tagged template for sanitized interpolation stays.
 - **Pagination iteration** — `for await (const row of io.paginate('/products', {...}))` follows
   `links.next` / the opaque `cursor` and stops on absence. Encodes "page by `items.length`, never by
   your requested limit."
-- **JSONL / `application/json-seq` streaming** — NDJSON framing for the `io.stream` duplexes and a browser
-  `ReadableStream` reader.
+- **Record streaming (decode side) — `io.records`** _(built 2026-07-03)_.
+  `io.records.get/post(url, data?, options?)` → a lazy async iterable of **parsed records**; the
+  request fires on first iteration. Framing is negotiated from the response content type — JSONL /
+  NDJSON by default, **RFC 7464 `application/json-seq`** when the type says so — and forceable via
+  `{framing}`. The default `Accept` advertises both. Errors are first-class: a non-2xx **reads the
+  streamed error body** and throws a `BadStatus` with parsed data (never an unread stream), a
+  malformed record throws `FailedIO` with the `SyntaxError` on `.cause`, breaking out of the loop
+  cancels the response stream, and aborts surface even when a transport ignores the signal (the
+  reader races the signal).
+  **Build-vs-adopt split with `stream-chain`:** double-meh owns the _protocol/consume_ layer (this
+  simple iteration, content-type negotiation, json-seq, parsed errors — zero-dep); record
+  _processing_ and the _encode/upload_ side are delegated to `stream-chain` — pipe
+  `io.stream.get(...)` through `parserWebStream()` for transform pipelines, terminate a
+  `stringerWebStream()` pipe into `io.stream.put` for uploads. No JSONL stringer or record
+  pipeline machinery is duplicated here.
 
 ## The safety story — retry × conditional × idempotency
 
@@ -566,14 +579,22 @@ readable, response}`), rebuilt on fetch/undici streams (`duplex:'half'`). Pipe a
 
 ## SSE
 
-**In v1, and not a transport.** Server-Sent Events ride the fetch transport:
-`io.full.get(url, {accept: 'text/event-stream', stream: true})` returns a `Response` whose `body` is the
-event stream, which the streaming pipeline reframes. So `io.events(url)` / `io.sse(url)` is a small layer
-— an SSE frame parser (`event:`/`data:`/`id:`/`retry:`) + a reconnect loop (`Last-Event-ID`, `retry:`) +
-an async-iterable — a sibling of `io.paginate`, ~100–150 lines because it reuses fetch + streaming.
-Preferred over native `EventSource`, which is GET-only with no custom headers (no `Authorization`) — the
-same limitation as `<link rel=preload>`. The article's push channel for cache-invalidation is then a
-consumer of `io.events`.
+**Built 2026-07-03, and not a transport.** Server-Sent Events ride the fetch transport — SSE is a
+small layer over fetch + streaming, exactly as anticipated. The name is **`io.sse(url, data?,
+options?)`** (the design floated `io.events` / `io.sse`; `events` was taken by the core lifecycle
+emitter `io.on/off/emit`, so `sse` won to avoid two unrelated "events" concepts on one object).
+Semantics, EventSource-compatible where it matters:
+
+- an async-iterable of `{data, event, id}` frames — full parser (`data:` multiline join, `event:`,
+  `id:` incl. the NUL guard, `retry:`, `:` comments/keep-alives, `\r\n|\n|\r` line endings);
+- a **reconnect loop**: a dropped stream reconnects after `reconnect` ms (default
+  `io.sse.reconnectDelay` = 3000, server `retry:` hint overrides) carrying `Last-Event-ID` (seed a
+  resume with `{lastEventId}`); `reconnect: false` for one-shot reads; **204 ends the
+  subscription** (per spec); a non-2xx is fatal and throws `BadStatus` with the **parsed** error
+  body; a wrong content type is fatal; an abort passes through and never reconnects.
+- Because each reconnect re-runs the full pipeline, request inspectors re-fire — fresh
+  `Authorization` per reconnect, the very thing native `EventSource` (GET-only, no custom headers)
+  can't do. The article's push channel for cache-invalidation is then a consumer of `io.sse`.
 
 ## Out of scope (the server's job)
 
@@ -584,13 +605,13 @@ helpers and reading the envelopes back.
 
 ## Scope
 
-| Tier                           | Items                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **v1 (this repo)**             | fetch transport; verbs + `io.full` + the envelope; JSON fast path; data/MIME processors; request ergonomics (conditional, idempotency, query builders, `as`, `accept`); safety-aware retry; `problem+json`; inspectors; events; cache (browser: Cache API + IndexedDB + Storage; CLI: in-memory default + filesystem; app-governed TTL, 304 revalidation, invalidation glue); track; mock; bust; `url`; download progress; pagination iteration; bundle client; compression encoders (CLI); JSONL/json-seq streaming; `io.stream` duplexes; code-forward (early-init + request adoption); canonical `makeKey`; SW invalidation message-contract + cross-tab (BroadcastChannel); SSE (`io.events`, rides fetch+streaming) |
-| **Spike to size, then decide** | — (SSE resolved → v1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **Research / later**           | upload progress (stream-insertion); offline + background-sync writes (SW); SQLite cache backend (feature-detected)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Separate repos**             | bundle _server_ example; reference Service Worker; possibly SSE                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Benchmark-gated**            | bundle promotion (vs HTTP/2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Tier                           | Items                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1 (this repo)**             | fetch transport; verbs + `io.full` + the envelope; JSON fast path; data/MIME processors; request ergonomics (conditional, idempotency, query builders, `as`, `accept`); safety-aware retry; `problem+json`; inspectors; events; cache (browser: Cache API + IndexedDB + Storage; CLI: in-memory default + filesystem; app-governed TTL, 304 revalidation, invalidation glue); track; mock; bust; `url`; download progress; pagination iteration; bundle client; compression encoders (CLI); JSONL/json-seq record iteration (`io.records`, decode side; processing/encode delegated to `stream-chain`); `io.stream` duplexes; code-forward (early-init + request adoption); canonical `makeKey`; SW invalidation message-contract + cross-tab (BroadcastChannel); SSE (`io.sse`, rides fetch+streaming) |
+| **Spike to size, then decide** | — (SSE resolved → v1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Research / later**           | upload progress (stream-insertion); offline + background-sync writes (SW); SQLite cache backend (feature-detected)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Separate repos**             | bundle _server_ example; reference Service Worker; possibly SSE                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Benchmark-gated**            | bundle promotion (vs HTTP/2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 REST-awareness target: as much as we can, **in layers**, modulo not bloating the codebase — kept in this
 repo unless a piece proves large.

@@ -204,6 +204,37 @@ export interface StreamNamespace {
   patch: StreamWriteVerb;
 }
 
+export type RecordsOverrides = Overrides & {framing?: 'jsonl' | 'json-seq'};
+
+export interface RecordsNamespace {
+  get<T = unknown>(
+    url: Target,
+    data?: unknown,
+    options?: RecordsOverrides
+  ): AsyncIterableIterator<T>;
+  post<T = unknown>(
+    url: Target,
+    data?: unknown,
+    options?: RecordsOverrides
+  ): AsyncIterableIterator<T>;
+}
+
+export interface SseEvent {
+  data: string;
+  event: string;
+  id: string | undefined;
+}
+
+export type SseOverrides = Overrides & {
+  reconnect?: boolean | number;
+  lastEventId?: string;
+};
+
+export interface Sse {
+  (url: Target, data?: unknown, options?: SseOverrides): AsyncIterableIterator<SseEvent>;
+  reconnectDelay: number;
+}
+
 export interface Deferred<T> {
   promise: Promise<T>;
   resolve(value: T): void;
@@ -286,6 +317,8 @@ export interface IO extends Verbs {
   <T = unknown>(url: Target, data?: unknown, options?: Overrides): Promise<T>;
   full: FullNamespace;
   stream: StreamNamespace;
+  records: RecordsNamespace;
+  sse: Sse;
   track: Track;
   cache: Cache;
   retry: Retry;

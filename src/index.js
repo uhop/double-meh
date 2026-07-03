@@ -5,6 +5,8 @@ import {installCache} from './services/cache.js';
 import {installRetry} from './services/retry.js';
 import {installMock} from './services/mock.js';
 import {installHelpers} from './helpers.js';
+import {installRecords} from './records.js';
+import {installSse} from './sse.js';
 import {installCodeForward} from './code-forward.js';
 
 const assemble = instance => {
@@ -18,6 +20,8 @@ const assemble = instance => {
   instance.retry.attach();
   installMock(instance);
   installHelpers(instance);
+  installRecords(instance);
+  installSse(instance);
   instance.create = () => assemble(createIO());
   return instance;
 };
@@ -44,5 +48,7 @@ export const retry = io.retry;
 export const mock = io.mock;
 export const update = io.update;
 export const stream = io.stream;
+export const records = io.records;
+export const sse = io.sse;
 export {installCodeForward} from './code-forward.js';
 export {IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';

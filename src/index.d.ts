@@ -4,6 +4,8 @@ import type {
   MetaVerb,
   FullNamespace,
   StreamNamespace,
+  RecordsNamespace,
+  Sse,
   Track,
   Cache,
   Retry,
@@ -25,6 +27,8 @@ export declare const remove: Verb;
 export declare const options: MetaVerb;
 export declare const full: FullNamespace;
 export declare const stream: StreamNamespace;
+export declare const records: RecordsNamespace;
+export declare const sse: Sse;
 export declare const track: Track;
 export declare const cache: Cache;
 export declare const retry: Retry;
@@ -50,5 +54,8 @@ export type {
   DecodeMode,
   DownloadProgress,
   StreamDuplex,
+  RecordsOverrides,
+  SseEvent,
+  SseOverrides,
   IO
 } from './types.js';

@@ -24,7 +24,8 @@ Why it might be for you:
   no server, and a mocked 503 really gets retried.
 - **Web-native streaming, both directions.** Response streams, request streams, and
   `{writable, readable, response}` duplexes that drop straight into a
-  [stream-chain](https://github.com/uhop/stream-chain) pipeline.
+  [stream-chain](https://github.com/uhop/stream-chain) pipeline — plus parsed record iteration
+  (JSONL / `json-seq`) and a reconnecting SSE client on top.
 - **Solid.** Zero dependencies, ESM, bundled TypeScript typings, tested across Node, Bun, and Deno.
 
 ## Examples
