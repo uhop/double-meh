@@ -1,16 +1,37 @@
+import type {IOError, FailedIO, BadStatus, TimedOut} from './envelope.js';
+
 export type Method =
   'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | (string & {});
 
 export type HeaderValue = string | string[];
 export type HeaderDict = Record<string, HeaderValue>;
 
+export type QueryInput = Record<string, unknown> | URLSearchParams | string | number | boolean;
+
+export type DecodeMode = 'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData';
+
+export interface RetryConfig {
+  retries?: number;
+  initDelay?: number;
+  force?: boolean;
+  nextDelay?(delay: number, attempt: number, options: Options): number;
+  continueRetries?(response: Response, attempt: number, options: Options): boolean;
+}
+
+export interface DownloadProgress {
+  loaded: number;
+  total: number;
+  lengthComputable: boolean;
+}
+
 export interface Options {
-  url: string;
+  url: string | URL;
   method?: Method;
-  query?: Record<string, unknown>;
+  query?: QueryInput;
   data?: unknown;
-  headers?: HeaderDict;
+  headers?: HeaderDict | Headers;
   signal?: AbortSignal;
+  timeout?: number;
   transport?: string;
   fetch?: Omit<RequestInit, 'method' | 'headers' | 'body' | 'signal'>;
   accept?: string;
@@ -27,22 +48,23 @@ export interface Options {
     | 'form'
     | 'octet'
     | (string & {});
+  decode?: DecodeMode | ((response: Response, options: Options) => unknown);
   ifMatch?: string;
   ifNoneMatch?: string;
   fields?: string[];
   sort?: string[];
   expand?: string[];
   stream?: boolean;
-  withEtag?: boolean;
+  bust?: boolean | string;
   ignoreBadStatus?: boolean;
   cache?: boolean | {ttl?: number};
-  track?: boolean;
-  wait?: boolean;
-  retries?: number;
-  retry?: boolean;
-  initDelay?: number;
+  track?: boolean | 'wait';
+  mock?: boolean;
+  retry?: boolean | number | RetryConfig;
   idempotencyKey?: boolean | string;
-  [key: string]: unknown;
+  force?: boolean;
+  onDownloadProgress?(info: DownloadProgress): void;
+  meta?: Record<string, unknown>;
 }
 
 export interface PreparedRequest {
@@ -57,6 +79,8 @@ export interface PreparedRequest {
 export interface RequestContext {
   options: Options;
   key: string;
+  userSignal?: AbortSignal;
+  timeoutSignal?: AbortSignal | null;
 }
 
 export interface ServerTimingMetric {
@@ -65,8 +89,8 @@ export interface ServerTimingMetric {
   desc?: string;
 }
 
-export interface Envelope {
-  data: unknown;
+export interface Envelope<T = unknown> {
+  data: T;
   status: number;
   ok: boolean;
   response: Response;
@@ -83,6 +107,8 @@ export interface Envelope {
 
 export type Transport = (request: PreparedRequest, ctx: RequestContext) => Promise<Response>;
 
+export type InspectorMatch = string | RegExp | ((url: string) => boolean);
+
 export type RequestInspector = (
   request: PreparedRequest,
   options: Options
@@ -92,6 +118,16 @@ export type ResponseInspector = (
   envelope: Envelope,
   ctx: RequestContext
 ) => void | Envelope | Promise<void | Envelope>;
+
+export interface RequestInspectorEntry {
+  fn: RequestInspector;
+  match?: InspectorMatch;
+}
+
+export interface ResponseInspectorEntry {
+  fn: ResponseInspector;
+  match?: InspectorMatch;
+}
 
 export interface DataProcessor {
   match(data: unknown, options: Options): boolean;
@@ -113,21 +149,28 @@ export interface Service {
   ): Response | null | Promise<Response | null>;
 }
 
+export type ServiceDefault = boolean | ((options: Options) => boolean);
+
 export type Target = string | URL | Options;
 export type Overrides = Omit<Options, 'url'> & {url?: never};
-export type Verb = (url: Target, data?: unknown, options?: Overrides) => Promise<unknown>;
-export type FullVerb = (url: Target, data?: unknown, options?: Overrides) => Promise<Envelope>;
+export type Verb = <T = unknown>(url: Target, data?: unknown, options?: Overrides) => Promise<T>;
+export type MetaVerb = (url: Target, data?: unknown, options?: Overrides) => Promise<Envelope>;
+export type FullVerb = <T = unknown>(
+  url: Target,
+  data?: unknown,
+  options?: Overrides
+) => Promise<Envelope<T>>;
 
 export interface Verbs {
   get: Verb;
-  head: Verb;
+  head: MetaVerb;
   post: Verb;
   put: Verb;
   patch: Verb;
   delete: Verb;
   del: Verb;
   remove: Verb;
-  options: Verb;
+  options: MetaVerb;
 }
 
 export interface FullVerbs {
@@ -143,36 +186,34 @@ export interface FullVerbs {
 }
 
 export interface FullNamespace extends FullVerbs {
-  (url: Target, data?: unknown, options?: Overrides): Promise<Envelope>;
+  <T = unknown>(url: Target, data?: unknown, options?: Overrides): Promise<Envelope<T>>;
 }
+
+export interface StreamDuplex<T = unknown> {
+  readable: ReadableStream;
+  writable: WritableStream;
+  response: Promise<Envelope<T>>;
+}
+
+export type StreamWriteVerb = (url: Target, options?: Overrides) => StreamDuplex;
 
 export interface StreamNamespace {
   get(url: Target, data?: unknown, options?: Overrides): Promise<ReadableStream>;
-}
-
-export interface StreamDuplex {
-  readable: ReadableStream;
-  writable: WritableStream;
-  response: Promise<Envelope>;
-}
-
-export type StreamVerb = (url: Target, options?: Overrides) => StreamDuplex;
-
-export interface Ios {
-  (options: Options): StreamDuplex;
-  put: StreamVerb;
-  post: StreamVerb;
-  patch: StreamVerb;
+  put: StreamWriteVerb;
+  post: StreamWriteVerb;
+  patch: StreamWriteVerb;
 }
 
 export interface Deferred<T> {
   promise: Promise<T>;
   resolve(value: T): void;
   reject(reason?: unknown): void;
+  flying?: boolean;
 }
 
 export interface Track {
   active: boolean;
+  theDefault: ServiceDefault;
   deferred: Record<string, Deferred<Envelope>>;
   flyByKey(key: string): Deferred<Envelope>;
   fly(options: Target): Deferred<Envelope>;
@@ -205,6 +246,7 @@ export type CachePattern = string | RegExp | ((key: string) => boolean);
 export interface Cache {
   storage: CacheStorage;
   defaultTtl: number;
+  theDefault: ServiceDefault;
   isActive: boolean;
   optIn(options: Options): boolean;
   attach(): IO;
@@ -216,10 +258,11 @@ export interface Cache {
 }
 
 export interface Retry {
+  retries: number;
   initDelay: number;
-  nextDelay(delay: number, attempt: number, options: Options): number;
+  maxDelay: number;
+  nextDelay(delay: number, attempt: number, options?: Options): number;
   isActive: boolean;
-  optIn(options: Options): boolean;
   attach(): IO;
   detach(): IO;
 }
@@ -237,27 +280,35 @@ export interface Mock {
   clear(): IO;
 }
 
+export type UpdateFn<T> = (data: T) => T | undefined | Promise<T | undefined>;
+
 export interface IO extends Verbs {
-  (url: Target, data?: unknown, options?: Overrides): Promise<unknown>;
+  <T = unknown>(url: Target, data?: unknown, options?: Overrides): Promise<T>;
   full: FullNamespace;
   stream: StreamNamespace;
   track: Track;
   cache: Cache;
   retry: Retry;
   mock: Mock;
-  update(target: Target, fn: (data: unknown) => unknown, options?: Overrides): Promise<unknown>;
+  create(): IO;
+  update<T = unknown>(target: Target, fn: UpdateFn<T>, options?: Overrides): Promise<T>;
   adopt(options: Target, source: Promise<Response> | Response): Promise<Envelope>;
   toEnvelope(response: Response, options: Target): Promise<Envelope>;
-  run(options: Target): Promise<Envelope>;
-  request(options: Target): Promise<Envelope>;
+  run<T = unknown>(options: Target): Promise<Envelope<T>>;
   makeKey(options: Options): string;
   buildUrl(options: Options): string;
   makeVerb(method: string): Verb;
+  inFlight: number;
+
+  IOError: typeof IOError;
+  FailedIO: typeof FailedIO;
+  BadStatus: typeof BadStatus;
+  TimedOut: typeof TimedOut;
 
   transports: Record<string, Transport>;
   defaultTransport: Transport | null;
-  requestInspectors: RequestInspector[];
-  responseInspectors: ResponseInspector[];
+  requestInspectors: RequestInspectorEntry[];
+  responseInspectors: ResponseInspectorEntry[];
   dataProcessors: DataProcessor[];
   mimeProcessors: MimeProcessor[];
   services: Service[];
@@ -265,8 +316,8 @@ export interface IO extends Verbs {
 
   registerTransport(name: string, transport: Transport): IO;
   inspect: {
-    request(fn: RequestInspector): IO;
-    response(fn: ResponseInspector): IO;
+    request(fn: RequestInspector, match?: InspectorMatch): IO;
+    response(fn: ResponseInspector, match?: InspectorMatch): IO;
   };
   registerData(processor: DataProcessor): IO;
   registerMime(processor: MimeProcessor): IO;

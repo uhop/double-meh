@@ -47,7 +47,7 @@ test('mock composes with retry: a 503 then a 200 is retried', async t => {
         headers: {'content-type': 'application/json'}
       })
   );
-  const data = await io.get('https://example.com/flaky', null, {retries: 2, initDelay: 0});
+  const data = await io.get('https://example.com/flaky', null, {retry: {retries: 2, initDelay: 0}});
   t.equal(n, 2, 'the mock was retried by the retry service');
   t.deepEqual(data, {ok: true});
   io.mock.clear();

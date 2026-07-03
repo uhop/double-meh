@@ -1,3 +1,5 @@
+import {canonicalUrl} from '../key.js';
+
 const toResponse = async value => {
   const resolved = await value;
   if (resolved instanceof Response) return resolved;
@@ -12,13 +14,14 @@ export const installMock = io => {
   const rules = [];
 
   const findMatch = (request, ctx) => {
-    const direct = exact.get(request.url);
+    const direct = exact.get(canonicalUrl(request.url));
     if (direct) return direct;
     for (const rule of rules) if (rule.match(request.url, request, ctx)) return rule.callback;
     return undefined;
   };
 
   const handle = (request, ctx) => {
+    if (ctx.options.mock === false) return null;
     const callback = findMatch(request, ctx);
     return callback ? toResponse(callback(request, ctx)) : null;
   };
@@ -36,8 +39,8 @@ export const installMock = io => {
       if (matcher.endsWith('*')) {
         const prefix = matcher.slice(0, -1);
         setRule(matcher, url => url.startsWith(prefix), callback);
-      } else if (callback) exact.set(matcher, callback);
-      else exact.delete(matcher);
+      } else if (callback) exact.set(canonicalUrl(matcher), callback);
+      else exact.delete(canonicalUrl(matcher));
     } else if (matcher instanceof RegExp) {
       setRule(matcher, url => matcher.test(url), callback);
     } else if (typeof matcher === 'function') {

@@ -48,3 +48,33 @@ test('update: fn returning undefined is a no-op (no PUT)', async t => {
   t.deepEqual(result, {n: 1}, 'returns the current value');
   reset();
 });
+
+test('update: refuses an unconditional update when the GET has no ETag', async t => {
+  let puts = 0;
+  serve(request => {
+    if (request.method !== 'GET') ++puts;
+    return json({n: 1});
+  });
+  try {
+    await io.update('https://example.com/u/4', cur => cur);
+    t.fail('expected a throw');
+  } catch (error) {
+    t.ok(error instanceof io.IOError, 'IOError thrown');
+    t.equal(puts, 0, 'no PUT was issued');
+  }
+  reset();
+});
+
+test('update: force allows an unconditional update', async t => {
+  let ifMatch = 'unset';
+  serve(request => {
+    if (request.method === 'PUT') ifMatch = request.headers.get('if-match');
+    return json({n: 1});
+  });
+  const result = await io.update('https://example.com/u/5', cur => ({...cur, n: 2}), {
+    force: true
+  });
+  t.equal(ifMatch, null, 'PUT went out without If-Match');
+  t.deepEqual(result, {n: 1}, 'returns the server representation');
+  reset();
+});

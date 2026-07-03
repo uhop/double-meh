@@ -23,9 +23,10 @@ double-meh — HTTP I/O. A lightweight, zero-dependency micro-package. The npm p
 
 ## Architecture quick reference
 
-<!-- TODO: Replace with actual architecture once modules are added -->
-
-- Entry point: `src/index.js`
+- Entry point: `src/index.js` (assembles the default instance); core pipeline + `createIO()` in `src/io.js`
+- Envelope + errors (`IOError`/`FailedIO`/`TimedOut`/`BadStatus`): `src/envelope.js`
+- Services (track/cache/retry/mock): `src/services/`; transport: `src/transports/fetch.js`
+- Cache and track are ON by default for plain GETs; opt out per request (`cache: false`, `track: false`)
 - Tests: `tests/test-*.*js`, `tests/test-*.*ts`
 - Wiki docs: `wiki/` (git submodule)
 
@@ -43,9 +44,8 @@ double-meh — HTTP I/O. A lightweight, zero-dependency micro-package. The npm p
 
 ## File layout
 
-<!-- TODO: Update with actual file layout once modules are added -->
-
-- Entry point: `src/index.js`
+- `src/index.js`, `src/io.js`, `src/envelope.js`, `src/key.js`, `src/helpers.js`, `src/code-forward.js`
+- `src/services/{track,cache,retry,mock}.js`, `src/transports/fetch.js` (+ per-module `.d.ts`)
 - Tests: `tests/test-*.*js`, `tests/test-*.*ts`
 - Wiki docs: `wiki/` (git submodule)
 

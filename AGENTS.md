@@ -33,15 +33,20 @@ npm install
 
 ## Project structure
 
-<!-- TODO: Update with actual project structure once modules are added -->
-
 ```
 double-meh/
 ├── package.json          # Package config; "tape6" section configures test discovery
-├── src/                  # Source code
-│   └── index.js          # Main entry point
+├── src/                  # Source code (plain ESM, no build step)
+│   ├── index.js          # Main entry: assembles the default instance
+│   ├── io.js             # Core pipeline + createIO() factory
+│   ├── envelope.js       # Envelope + errors (IOError/FailedIO/TimedOut/BadStatus)
+│   ├── key.js            # URL building + canonical request identity
+│   ├── helpers.js        # io.update()
+│   ├── code-forward.js   # __doubleMeh prelude protocol
+│   ├── services/         # track, cache, retry, mock
+│   └── transports/       # fetch
 ├── tests/                # Test files (test-*.mjs, test-*.mts)
-├── dev-docs/             # Internal developer documentation
+├── dev-docs/             # Internal developer documentation (design.md)
 ├── wiki/                 # GitHub wiki documentation (git submodule)
 └── .github/              # CI workflows, Dependabot config
 ```
@@ -66,9 +71,13 @@ double-meh/
 
 ## Architecture
 
-<!-- TODO: Replace with actual architecture description once modules are added -->
-
-This section will describe the core modules, their relationships, and the data flow.
+One pipeline: `verb sugar → prepare → request inspectors → track (run-level GET dedup) → services
+onion (cache → retry → mock) → transport → decode → envelope → response inspectors`. The method
+declares the return shape (`io.get` → data, `io.full.get` → envelope, `io.stream.*` →
+stream/duplex); options tune behavior, never shape. Cache and track are on by default for plain
+GETs (opt out per request or via `theDefault`). The default export is one shared configured
+instance; `io.create()` makes an isolated one. Details: [ARCHITECTURE.md](./ARCHITECTURE.md) and
+[dev-docs/design.md](./dev-docs/design.md).
 
 ## Writing tests
 

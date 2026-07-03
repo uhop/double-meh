@@ -77,6 +77,16 @@ one bag: `io.get({url, stream: true})`. So behavior flags never collide with the
 server's call, not ours.) Args are combined with a small `deepMerge` (endpoint ← overrides), so nested
 `headers`/`query` merge per-key while `url` is pinned to the 1st arg.
 
+**One shared instance by default; isolation on demand.** The default export is one configured
+instance — apps configure it once (inspectors, defaults) and every module shares it. For genuine
+isolation (a CLI/server process hosting several independent consumers), `io.create()` returns a
+fully-equipped independent instance (own registries, services, cache), and `createIO()` (from
+`io.js`) returns a bare pipeline with no transport/services for minimal builds. Per-host
+configuration on the shared instance does **not** need instances: inspectors take an optional
+scope — `io.inspect.request(fn, match)` where `match` is a URL prefix string, a RegExp, or a
+predicate — so an SDK registers its `Authorization` inspector scoped to its own host, and
+per-service defaults (`theDefault`, below) accept predicates for the same purpose.
+
 **`io` is the low-level callable; the verbs are sugar.** `io(options)` ≡ `io({...options, method:
 'GET'})`-style dispatch (returns `data`), and `io.full(options)` returns the envelope —
 `io.get(x)` is just `io({...x-as-options, method: 'GET'})`. This makes a **reusable endpoint descriptor**
@@ -114,6 +124,14 @@ The single response contract — returned by every `io.full.*` call **and** carr
 `BadStatus` (so a non-2xx failure reads the same way as a success). Transport failures
 (`FailedIO` / `TimedOut`) are the exception: no HTTP response arrived, so they carry only `.response`
 (possibly `undefined`) and `.options`, not the envelope.
+
+**Error taxonomy.** `IOError` is the neutral base (one `instanceof` catches everything the library
+throws); `FailedIO` (transport/network failure, subclass `TimedOut`) and `BadStatus` are siblings
+under it — a 404 is a _successful_ I/O, so it is not a `FailedIO`. Every wrap preserves the
+original error on `.cause` (undici's syscall detail, the `SyntaxError` of a malformed JSON body).
+**Aborts are never wrapped and never retried** — a user abort surfaces as the platform's
+`AbortError` as-is; `options.timeout` (via `AbortSignal.timeout`, composed with the user's signal
+through `AbortSignal.any`) surfaces as `TimedOut`.
 
 ```js
 const envelope = {
@@ -211,13 +229,20 @@ multi-value). `url\`\`` tagged template for sanitized interpolation stays.
 - **Pagination iteration** — `for await (const row of io.paginate('/products', {...}))` follows
   `links.next` / the opaque `cursor` and stops on absence. Encodes "page by `items.length`, never by
   your requested limit."
-- **JSONL / `application/json-seq` streaming** — NDJSON framing for the Node `ios` stream and a browser
+- **JSONL / `application/json-seq` streaming** — NDJSON framing for the `io.stream` duplexes and a browser
   `ReadableStream` reader.
 
 ## The safety story — retry × conditional × idempotency
 
 These are one story, not three services. Retry is **verb-aware** (a safety _upgrade_ over `heya/io`,
 which would re-fire a bare POST).
+
+**One option:** `retry: true | n | {retries, initDelay, force, nextDelay, continueRetries}` —
+`true` uses `io.retry` defaults, a number caps the retries, the bag tunes everything per request.
+`retries: 0` with a `continueRetries(response, attempt, options)` predicate is the **polling mode**
+(iterate until the predicate declines, e.g. `response.status === 202`). `force: true` is the
+explicit override of the verb-safety gate below. `Retry-After` is honored but clamped to
+`io.retry.maxDelay`; **an abort is never retried** and a streamed request body stands retry down.
 
 **Two retry modes:**
 
@@ -262,9 +287,19 @@ key. `io.makeKey(options)` is exposed so callers can compute it themselves.
 
 ## Services (priority middleware)
 
-Each is opt-in and attachable/detachable. Most are **`Response`-level middleware** in a priority onion
+Each is attachable/detachable. Most are **`Response`-level middleware** in a priority onion
 (`handle(request, ctx, next)`); **`track` is the exception** — a run-level dedup that shares the decoded
 **envelope** (see below).
+
+**Opt-in protocol (the `heya/io` scaffold, carried over).** Per request, the service's own option
+wins when present (`cache: false`, `track: true`, `mock: false`); otherwise the service consults its
+`theDefault` — a boolean **or a predicate over the options** (`io.cache.theDefault = o =>
+o.url.startsWith('https://api.mine/')`). The shipped default for cache and track is "plain GETs on
+the default transport are **in**" — so **caching and dedup are on by default for GETs**, and
+`cache: false` / `track: false` opt a request out. Two hard gates sit above the protocol: `stream`
+requests are never cached/deduped (single-consumer), and track/cache are **GET-only regardless of
+the flag** — sharing one decoded envelope or a stored body is only sound for safe reads, so
+`track: true` on a POST does not dedup.
 
 | Service                      | Disposition                  |
 | ---------------------------- | ---------------------------- |
@@ -302,8 +337,9 @@ The platform caught up, so the _storage_ is now the platform's and the _value-ad
     where the runtime ships it built-in (`node:sqlite` ≥ Node 22.5 experimental, `bun:sqlite`); Deno has
     no builtin, so it would need a dependency and stays off the zero-dep path. SQLite is a fast-follow,
     not a v1 blocker.
-- **Time policy is app-governed (this is not an HTTP cache).** Opt-in per request (`cache: true|false`)
-  with a duration — `cache: {ttl}` overrides a configurable `io.cache.defaultTtl`. `ttl: Infinity` keeps
+- **Time policy is app-governed (this is not an HTTP cache).** GETs are cached **by default** once
+  the service is attached (`cache: false` opts a request out; `io.cache.theDefault` narrows the
+  default set); `cache: {ttl}` overrides a configurable `io.cache.defaultTtl` per request. `ttl: Infinity` keeps
   `heya/io`'s "cache until explicitly invalidated" mode; a finite default is a safety net against
   _forgotten_ invalidation (the article's toxic-stale warning). `defaultTtl` is finite, value TBD —
   ~5 min as a working placeholder. Server `Cache-Control`/`Expires` may _seed_ a default at most — the
@@ -315,8 +351,10 @@ The platform caught up, so the _storage_ is now the platform's and the _value-ad
   pure housekeeping, not correctness.
 - **On expiry, revalidate — don't just drop.** Store `ETag`/`Last-Modified` beside the body; an expired
   entry _with_ a validator does a conditional `If-None-Match`/`If-Modified-Since` → **304** reuse + bump
-  `expiresAt` (cheap), **200** replace; expired _without_ a validator → miss/refetch; an explicit
-  `remove`/prefix-evict deletes now. Key by `Vary`. (Cache API stores `Response`s, so this metadata
+  `expiresAt` + **merge the 304's headers into the stored entry** (RFC 9111 §3.2, sans
+  `Content-Length`), **200** replace; expired _without_ a validator → miss/refetch; an explicit
+  `remove`/prefix-evict deletes now. Key by `Vary`. A `bust: true|'key'` request appends a
+  uniquifying query param (defeats intermediary caches) and is itself never stored. (Cache API stores `Response`s, so this metadata
   rides as synthetic headers on the stored response.)
 - **App-level invalidation glue (the real value):** prefix eviction (`/users/*`), dropping derived
   values (a list's cached total), on-demand invalidation — the recall an HTTP cache never offers.
@@ -375,10 +413,13 @@ remain the escape hatch.
 
 ## Events
 
-A first-class, lightweight lifecycle emitter (request start / settle, in-flight count). The activity
-indicator / warn-before-unload pattern becomes a 3-line subscriber instead of an ad-hoc counter wired
-through inspectors. Cache hits and 304s flag as _non-network_ so the indicator isn't lit by a memory
-read; retry attempts and 412 conflicts emit their own events.
+A first-class, lightweight lifecycle emitter built into the core (`io.on/off/emit`). Wired events:
+`request` (a network run starts), `success` (envelope produced), `failure` (any throw), `retry`
+(per retry attempt, from the retry service), `ready` (code-forward drain complete); `io.inFlight`
+counts active network runs. The activity indicator / warn-before-unload pattern becomes a 3-line
+subscriber instead of an ad-hoc counter wired through inspectors. A cache hit still runs the
+pipeline, so it emits `request`/`success` — a `non-network` flag on the event payload is a
+possible refinement, not yet wired.
 
 ## Code-forward (early init & request hoisting)
 
@@ -448,12 +489,17 @@ dm.inFlight?.forEach(fly); // register the still-pending ones
 pending.forEach(([target, response]) => arrived(target, response)); // deliver the ones that already landed
 delete dm.setup;
 delete dm.inFlight;
-Object.assign(dm, io); // expose the live API on the brand global
 dm.use = fn => fn(io);
 dm.fly = fly;
 dm.arrived = arrived; // array → function: a response arriving post-drain now has a home
 io.emit('ready');
 ```
+
+**The global is a protocol marker, not the library.** `__doubleMeh` carries only the transfer
+protocol — the queue arrays pre-load, the three functions (`use`, `fly`, `arrived`) post-load. It
+is deliberately **not** upgraded into the `io` object (no `Object.assign(dm, io)`): a copied
+handle diverges from the live instance the moment `io` is reconfigured, and inline scripts that
+want the API can get it through `dm.use(io => …)`.
 
 **Why dual-mode (order-independent), not a one-shot drain.** Responses land at arbitrary times — the 2nd
 can arrive _after_ the library has drained — and, defensively, the library could initialize _before_ the
@@ -463,10 +509,8 @@ there? call it : queue it,"** in _both_ directions: registration (`fly` vs `inFl
 **and leaves `fly`/`arrived`/`use` installed**, so a response arriving post-drain calls `arrived`
 directly instead of dropping into a queue nobody re-reads. This generalizes the `heya/io` bundle-cookbook pre-fetch pattern (it stashed
 `__io_initial_options` to fly + `__io_initial_bundle` for arrived data, with an
-`if (loaded) unbundle() else store` check). The single `__doubleMeh` is thus a command-queue _and_, once
-loaded, the live `io` handle (`Object.assign(dm, io)`) — so non-module inline scripts use the library
-with no `import`. (Loaded as ESM, the entry performs this same upgrade, so `import io` and the global are
-one object.)
+`if (loaded) unbundle() else store` check). The single `__doubleMeh` is thus a command-queue pre-load
+and the three-function protocol surface post-load (see "protocol marker" above).
 
 **Build-vs-adopt note.** For a plain GET, the platform now hoists the _network_ on its own — a
 `<link rel="preload" as="fetch">` or a 103 Early-Hints preload warms the HTTP cache, and a later
@@ -505,8 +549,10 @@ routes, and offline policy are app-specific. The main project must work with **n
 
 ## Streaming & compression (CLI / Node)
 
-- **`ios`** — the Duplex source/sink, rebuilt on fetch/undici streams (`duplex:'half'`). Pipe a request
-  body in, pipe a response body out.
+- **`io.stream` write verbs** — the Duplex source/sink (`io.stream.put/post/patch` → `{writable,
+readable, response}`), rebuilt on fetch/undici streams (`duplex:'half'`). Pipe a request body in,
+  pipe a response body out; `io.stream.get` is the read-side sibling (`Promise<ReadableStream>`).
+  One namespace, per-verb shapes — "the method declares the return shape" already licenses that.
 - **Pipeline** — `decompress → reframe (JSONL/json-seq) → parse` inbound; `encode → send` outbound.
 - **Encoders** — pluggable, feature-detected registry: gzip, deflate, br, and **zstd** (where the
   runtime has it). CLI-only; the browser owns `Accept-Encoding` and we don't infringe.
@@ -538,13 +584,13 @@ helpers and reading the envelopes back.
 
 ## Scope
 
-| Tier                           | Items                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **v1 (this repo)**             | fetch transport; verbs + `io.full` + the envelope; JSON fast path; data/MIME processors; request ergonomics (conditional, idempotency, query builders, `as`, `accept`); safety-aware retry; `problem+json`; inspectors; events; cache (browser: Cache API + IndexedDB + Storage; CLI: in-memory default + filesystem; app-governed TTL, 304 revalidation, invalidation glue); track; mock; bust; `url`; download progress; pagination iteration; bundle client; compression encoders (CLI); JSONL/json-seq streaming; `ios`; code-forward (early-init + request adoption); canonical `makeKey`; SW invalidation message-contract + cross-tab (BroadcastChannel); SSE (`io.events`, rides fetch+streaming) |
-| **Spike to size, then decide** | — (SSE resolved → v1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **Research / later**           | upload progress (stream-insertion); offline + background-sync writes (SW); SQLite cache backend (feature-detected)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **Separate repos**             | bundle _server_ example; reference Service Worker; possibly SSE                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Benchmark-gated**            | bundle promotion (vs HTTP/2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Tier                           | Items                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **v1 (this repo)**             | fetch transport; verbs + `io.full` + the envelope; JSON fast path; data/MIME processors; request ergonomics (conditional, idempotency, query builders, `as`, `accept`); safety-aware retry; `problem+json`; inspectors; events; cache (browser: Cache API + IndexedDB + Storage; CLI: in-memory default + filesystem; app-governed TTL, 304 revalidation, invalidation glue); track; mock; bust; `url`; download progress; pagination iteration; bundle client; compression encoders (CLI); JSONL/json-seq streaming; `io.stream` duplexes; code-forward (early-init + request adoption); canonical `makeKey`; SW invalidation message-contract + cross-tab (BroadcastChannel); SSE (`io.events`, rides fetch+streaming) |
+| **Spike to size, then decide** | — (SSE resolved → v1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Research / later**           | upload progress (stream-insertion); offline + background-sync writes (SW); SQLite cache backend (feature-detected)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Separate repos**             | bundle _server_ example; reference Service Worker; possibly SSE                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Benchmark-gated**            | bundle promotion (vs HTTP/2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 REST-awareness target: as much as we can, **in layers**, modulo not bloating the codebase — kept in this
 repo unless a piece proves large.
@@ -560,8 +606,9 @@ repo unless a piece proves large.
 
 ESM throughout; zero runtime dependencies; Prettier (100 width, single quotes, no bracket spacing, no
 trailing commas, arrow-parens avoid); `tape-six` across node/bun/deno + TS typing tests; naked version
-tags (no `v` prefix); BSD-3-Clause. Open packaging detail: ESM-only vs also shipping a CJS build (the
-scaffold's AGENTS.md mentions dual-consumer support — revisit when the entry points exist).
+tags (no `v` prefix); BSD-3-Clause. **ESM-only, decided:** no CJS build — `require(esm)` covers CJS
+consumers, backed by the declared `engines.node >= 20.19` floor and the standing invariant that the
+module graph carries **no top-level await** (a sync `require` path must stay sync).
 
 ### Bundlers
 
@@ -573,9 +620,12 @@ matches the no-transpile ethos. The "special handling" is all `package.json` met
 
 - **`exports`** map — the authoritative entry resolver (set once entry points settle).
 - **`sideEffects`** honesty — the entry `index.js` _has_ import-time effects (registers the fetch
-  transport, attaches `track`), so `"sideEffects": false` would be a lie a bundler could act on; mark
-  `["./src/index.js"]`. Optional services stay **separately-imported modules** (`installTrack`-style) —
-  which is what makes the library tree-shakeable: import cache, you get cache; don't, and it's dropped.
+  transport, attaches services), so it is marked `["./src/index.js"]` in `package.json`. The main
+  entry is deliberately **batteries-included** (the common configuration: fetch transport + track +
+  cache + retry + mock + helpers + code-forward — ~1000 lines / a few KB gzipped total, so the
+  stakes are kilobytes, not megabytes). Space-conscious consumers import the pieces directly:
+  `createIO()` from `io.js` for the bare pipeline plus the `install*` modules they want — those
+  stay side-effect-free and tree-shakeable.
 - **`browser`** export condition for the browser/CLI forks (cache backends, the `Server-Timing`
   fallback).
 - Optional **subpath exports** for the optional services and a tiny `/prelude`.

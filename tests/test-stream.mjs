@@ -1,6 +1,5 @@
 import test from 'tape-six';
 import {io, json, serve, reset} from './helper.mjs';
-import {ios} from '../src/index.js';
 
 const feed = (writable, text) => {
   const w = writable.getWriter();
@@ -43,12 +42,12 @@ test('io.put accepts a {readable} chain/duplex as the body', async t => {
   reset();
 });
 
-test('ios.put streams the request up and the response back as a duplex', async t => {
+test('io.stream.put streams the request up and the response back as a duplex', async t => {
   serve(async request => {
     const sent = await new Response(request.body).text();
     return new Response('echo:' + sent, {status: 200});
   });
-  const up = ios.put('https://example.com/data', {as: 'text'});
+  const up = io.stream.put('https://example.com/data', {as: 'text'});
   const done = feed(up.writable, 'hello');
   const out = await new Response(up.readable).text();
   await done;
@@ -58,12 +57,12 @@ test('ios.put streams the request up and the response back as a duplex', async t
   reset();
 });
 
-test('ios.put: a non-2xx errors the readable and rejects .response', async t => {
+test('io.stream.put: a non-2xx errors the readable and rejects .response', async t => {
   serve(async request => {
     await new Response(request.body).arrayBuffer();
     return new Response('boom', {status: 500});
   });
-  const up = ios.put('https://example.com/data', {as: 'text'});
+  const up = io.stream.put('https://example.com/data', {as: 'text'});
   const done = feed(up.writable, 'x');
   try {
     await new Response(up.readable).text();
@@ -81,12 +80,12 @@ test('ios.put: a non-2xx errors the readable and rejects .response', async t => 
   reset();
 });
 
-test('ios(options) is the callable duplex form', async t => {
+test('io.stream.post is the duplex form for POST', async t => {
   serve(async request => new Response('got:' + (await new Response(request.body).text())));
-  const up = ios({method: 'PUT', url: 'https://example.com/data', as: 'text'});
+  const up = io.stream.post('https://example.com/data', {as: 'text'});
   const done = feed(up.writable, 'z');
   const out = await new Response(up.readable).text();
   await done;
-  t.equal(out, 'got:z', 'callable ios(options) streams like the verb form');
+  t.equal(out, 'got:z', 'POST duplex streams like the PUT form');
   reset();
 });

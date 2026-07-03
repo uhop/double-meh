@@ -25,7 +25,7 @@ test('track wait: registers interest without firing; a real request resolves the
     ++hits;
     return json({v: 42});
   });
-  const waiter = io.get({url: 'https://example.com/w', wait: true});
+  const waiter = io.get({url: 'https://example.com/w', track: 'wait'});
   await Promise.resolve();
   t.equal(hits, 0, 'wait did not fire a request');
   const real = io.get('https://example.com/w');

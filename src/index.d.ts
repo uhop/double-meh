@@ -1,45 +1,39 @@
 import type {
   IO,
   Verb,
+  MetaVerb,
   FullNamespace,
   StreamNamespace,
-  Ios,
   Track,
   Cache,
   Retry,
-  Mock,
-  Target,
-  Overrides,
-  Envelope
+  Mock
 } from './types.js';
 
 declare const io: IO;
 export default io;
 
-export const get: Verb;
-export const head: Verb;
-export const post: Verb;
-export const put: Verb;
-export const patch: Verb;
-export const del: Verb;
-export const remove: Verb;
-export const options: Verb;
-export const full: FullNamespace;
-export const stream: StreamNamespace;
-export const ios: Ios;
-export const track: Track;
-export const cache: Cache;
-export const retry: Retry;
-export const mock: Mock;
-export const update: (
-  target: Target,
-  fn: (data: unknown) => unknown,
-  options?: Overrides
-) => Promise<unknown>;
-export const adopt: (options: Target, source: Promise<Response> | Response) => Promise<Envelope>;
+export declare const createIO: () => IO;
+export declare const create: () => IO;
+export declare const get: Verb;
+export declare const head: MetaVerb;
+export declare const post: Verb;
+export declare const put: Verb;
+export declare const patch: Verb;
+export declare const del: Verb;
+export declare const remove: Verb;
+export declare const options: MetaVerb;
+export declare const full: FullNamespace;
+export declare const stream: StreamNamespace;
+export declare const track: Track;
+export declare const cache: Cache;
+export declare const retry: Retry;
+export declare const mock: Mock;
+export declare const update: IO['update'];
+export declare const adopt: IO['adopt'];
 export {installCodeForward} from './code-forward.js';
 
-export {FailedIO, BadStatus, TimedOut} from './envelope.js';
+export {IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';
 export type {
   Options,
   Envelope,
@@ -48,8 +42,13 @@ export type {
   Transport,
   RequestInspector,
   ResponseInspector,
+  InspectorMatch,
   DataProcessor,
   MimeProcessor,
   Service,
+  RetryConfig,
+  DecodeMode,
+  DownloadProgress,
+  StreamDuplex,
   IO
 } from './types.js';

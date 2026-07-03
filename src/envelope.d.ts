@@ -9,20 +9,34 @@ export declare function defineEnvelope<T extends object>(
 
 export declare function makeEnvelope(response: Response, data: unknown, baseUrl?: string): Envelope;
 
-export declare class FailedIO extends Error {
-  response: Response | undefined;
+export declare function isAbort(error: unknown): boolean;
+
+export declare class IOError extends Error {
   options?: Options;
-  constructor(message?: string, response?: Response, options?: Options);
+  constructor(message?: string, options?: Options, errorOptions?: ErrorOptions);
+}
+
+export declare class FailedIO extends IOError {
+  response: Response | undefined;
+  constructor(
+    message?: string,
+    response?: Response,
+    options?: Options,
+    errorOptions?: ErrorOptions
+  );
 }
 
 export declare class TimedOut extends FailedIO {
-  constructor(response?: Response, options?: Options);
+  constructor(response?: Response, options?: Options, errorOptions?: ErrorOptions);
 }
 
-export declare class BadStatus extends FailedIO {
-  response: Response;
-  data: unknown;
-  status: number;
-  ok: boolean;
-  constructor(response: Response, data: unknown, baseUrl?: string, options?: Options);
+export declare interface BadStatus<T = unknown> extends Envelope<T> {}
+export declare class BadStatus<T = unknown> extends IOError {
+  constructor(
+    response: Response,
+    data: T,
+    baseUrl?: string,
+    options?: Options,
+    errorOptions?: ErrorOptions
+  );
 }

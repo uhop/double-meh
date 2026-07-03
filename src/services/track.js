@@ -25,17 +25,18 @@ export const installTrack = io => {
 
   const keyOf = options => io.makeKey(typeof options === 'string' ? {url: options} : options);
 
+  // GET-only by design: sharing one decoded envelope is only sound for safe reads
   const optIn = options => {
     if (options.stream) return false;
-    if (options.wait) return true;
-    if (options.track === false) return false;
-    if (options.track === true) return true;
-    if (options.transport) return false;
-    return (options.method || 'GET').toUpperCase() === 'GET';
+    if ((options.method || 'GET').toUpperCase() !== 'GET') return false;
+    if (options.track !== undefined) return !!options.track;
+    const d = io.track.theDefault;
+    return typeof d === 'function' ? !!d(options) : !!d;
   };
 
   io.track = {
     active: true,
+    theDefault: options => !options.transport,
     deferred,
     flyByKey,
     fly: options => flyByKey(keyOf(options)),
@@ -57,8 +58,7 @@ export const installTrack = io => {
     entry.flying = true; // adopt fulfills the deferred; a real request must not also fire
     Promise.resolve(source)
       .then(async response => {
-        const method = (options.method || 'GET').toUpperCase();
-        if (io.cache && io.cache.isActive && method === 'GET' && options.cache !== false) {
+        if (io.cache && io.cache.isActive && io.cache.optIn(options)) {
           await io.cache.save(options, response.clone());
         }
         entry.resolve(await io.toEnvelope(response, options));

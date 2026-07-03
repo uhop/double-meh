@@ -8,12 +8,12 @@ export const installCodeForward = io => {
   if (!dm && typeof window === 'undefined') return io;
   if (!dm || typeof dm !== 'object') dm = root[KEY] = {};
 
+  const use = fn => fn(io);
   const fly = target => {
     io.track.fly(target);
     return io.makeKey(normalize(target));
   };
   const arrived = (target, response) => io.adopt(target, response);
-  const use = fn => fn(io);
 
   const pending = Array.isArray(dm.arrived) ? dm.arrived : [];
   dm.setup?.forEach(use);
@@ -22,7 +22,7 @@ export const installCodeForward = io => {
   delete dm.setup;
   delete dm.inFlight;
 
-  Object.assign(dm, io);
+  // the global stays a small protocol marker: queue arrays pre-load, these three post-load
   dm.use = use;
   dm.fly = fly;
   dm.arrived = arrived;

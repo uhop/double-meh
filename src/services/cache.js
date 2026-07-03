@@ -36,9 +36,25 @@ export const installCache = io => {
     return c && typeof c === 'object' && typeof c.ttl === 'number' ? c.ttl : io.cache.defaultTtl;
   };
 
+  // GETs are cached by default; `cache: false` opts a request out
   const optIn = options => {
-    if (options.stream || !options.cache) return false;
-    return (options.method || 'GET').toUpperCase() === 'GET';
+    if (options.stream || options.bust) return false;
+    if ((options.method || 'GET').toUpperCase() !== 'GET') return false;
+    if (options.cache !== undefined) return !!options.cache;
+    const d = io.cache.theDefault;
+    return typeof d === 'function' ? !!d(options) : !!d;
+  };
+
+  const refresh = (entry, response, ttl) => {
+    const headers = new Headers(entry.headers);
+    response.headers.forEach((value, key) => {
+      if (key !== 'content-length') headers.set(key, value);
+    });
+    entry.headers = [...headers];
+    entry.etag = headers.get('etag') || undefined;
+    entry.lastModified = headers.get('last-modified') || undefined;
+    entry.expiresAt = ttl === Infinity ? Infinity : Date.now() + ttl;
+    return entry;
   };
 
   const handle = async (request, ctx, next) => {
@@ -51,9 +67,7 @@ export const installCache = io => {
       request.headers.set('If-Modified-Since', entry.lastModified);
     const response = await next();
     if (entry && response.status === 304) {
-      const ttl = ttlFor(ctx.options);
-      entry.expiresAt = ttl === Infinity ? Infinity : Date.now() + ttl;
-      await io.cache.storage.set(key, entry);
+      await io.cache.storage.set(key, refresh(entry, response, ttlFor(ctx.options)));
       return toResponse(entry);
     }
     if (response.ok) {
@@ -76,6 +90,7 @@ export const installCache = io => {
   io.cache = {
     storage,
     defaultTtl: 5 * 60 * 1000,
+    theDefault: options => !options.transport,
     isActive: false,
     optIn,
     attach: () => {

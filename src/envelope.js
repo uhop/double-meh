@@ -106,24 +106,34 @@ export const defineEnvelope = (target, response, data, baseUrl) => {
 export const makeEnvelope = (response, data, baseUrl) =>
   defineEnvelope({}, response, data, baseUrl);
 
-export class FailedIO extends Error {
-  constructor(message, response, options) {
-    super(message || 'Failed I/O');
+// covers AbortError (user abort) and TimeoutError (AbortSignal.timeout)
+export const isAbort = error =>
+  error != null && (error.name === 'AbortError' || error.name === 'TimeoutError');
+
+export class IOError extends Error {
+  constructor(message, options, errorOptions) {
+    super(message || 'I/O error', errorOptions);
     this.name = this.constructor.name;
-    this.response = response;
     this.options = options;
   }
 }
 
-export class TimedOut extends FailedIO {
-  constructor(response, options) {
-    super('Timed out', response, options);
+export class FailedIO extends IOError {
+  constructor(message, response, options, errorOptions) {
+    super(message || 'Failed I/O', options, errorOptions);
+    this.response = response;
   }
 }
 
-export class BadStatus extends FailedIO {
-  constructor(response, data, baseUrl, options) {
-    super('Bad status: ' + response.status, response, options);
+export class TimedOut extends FailedIO {
+  constructor(response, options, errorOptions) {
+    super('Timed out', response, options, errorOptions);
+  }
+}
+
+export class BadStatus extends IOError {
+  constructor(response, data, baseUrl, options, errorOptions) {
+    super('Bad status: ' + response.status, options, errorOptions);
     defineEnvelope(this, response, data, baseUrl);
   }
 }

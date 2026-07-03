@@ -44,6 +44,17 @@ test('drain runs queued setup, passing io', t => {
   cleanup();
 });
 
+test('the global stays a protocol marker, not the io object', t => {
+  globalThis.__doubleMeh = {};
+  installCodeForward(io);
+  const dm = globalThis.__doubleMeh;
+  t.equal(typeof dm.use, 'function', 'use installed');
+  t.equal(typeof dm.fly, 'function', 'fly installed');
+  t.equal(typeof dm.arrived, 'function', 'arrived installed');
+  t.notOk('get' in dm, 'io API is not copied onto the marker');
+  cleanup();
+});
+
 test('ready event fires once on drain', t => {
   let fired = 0;
   const onReady = () => ++fired;

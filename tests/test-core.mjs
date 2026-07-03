@@ -46,6 +46,7 @@ test('non-2xx throws BadStatus carrying the problem+json envelope', async t => {
     t.fail('expected a throw');
   } catch (error) {
     t.ok(error instanceof io.BadStatus, 'throws BadStatus');
+    t.ok(error instanceof io.IOError, 'BadStatus is an IOError');
     t.equal(error.status, 404, 'status on the error');
     t.equal(error.data.title, 'Nope', 'parsed problem+json on the error');
   }
@@ -157,10 +158,72 @@ test('read verbs: both null and undefined data drop the query', async t => {
     url = request.url;
     return json({ok: true});
   });
-  await io.get('https://example.com/x', undefined);
-  t.equal(url, 'https://example.com/x', 'undefined → no query');
-  await io.get('https://example.com/x', null);
-  t.equal(url, 'https://example.com/x', 'null → no query');
+  await io.get('https://example.com/q1', undefined);
+  t.equal(url, 'https://example.com/q1', 'undefined → no query');
+  await io.get('https://example.com/q2', null);
+  t.equal(url, 'https://example.com/q2', 'null → no query');
+  reset();
+});
+
+test('a URL with a fragment keeps the query ahead of the fragment', async t => {
+  let sentUrl;
+  serve(request => {
+    sentUrl = request.url;
+    return json({ok: true});
+  });
+  await io.get('https://example.com/a#top', {q: 1});
+  t.equal(sentUrl, 'https://example.com/a?q=1#top', 'query inserted before the fragment');
+  reset();
+});
+
+test('a Headers instance is accepted for options.headers', async t => {
+  let trace;
+  serve(request => {
+    trace = request.headers.get('x-trace');
+    return json({ok: true});
+  });
+  await io.get('https://example.com/h', null, {headers: new Headers({'X-Trace': 'hdr'})});
+  t.equal(trace, 'hdr', 'headers from a Headers instance are sent');
+  reset();
+});
+
+test('URLSearchParams is accepted as a query', async t => {
+  let sentUrl;
+  serve(request => {
+    sentUrl = request.url;
+    return json({ok: true});
+  });
+  await io.get('https://example.com/usp', new URLSearchParams({a: '1', b: '2'}));
+  t.equal(sentUrl, 'https://example.com/usp?a=1&b=2', 'params serialized into the query');
+  reset();
+});
+
+test('DELETE: positional data goes to the query; explicit options.data is the body', async t => {
+  const seen = [];
+  serve(request => {
+    seen.push({url: request.url, body: request.body});
+    return json({ok: true});
+  });
+  await io.delete('https://example.com/d', {soft: true});
+  t.equal(seen[0].url, 'https://example.com/d?soft=true', 'positional data → query');
+  t.equal(seen[0].body, undefined, 'no body from positional data');
+  await io.delete('https://example.com/d2', null, {data: {ids: [1, 2]}});
+  t.equal(seen[1].body, JSON.stringify({ids: [1, 2]}), 'explicit data → JSON body');
+  reset();
+});
+
+test('decode forces the response parsing mode', async t => {
+  serve(() => new Response('{"a":1}', {headers: {'content-type': 'text/plain'}}));
+  t.equal(
+    await io.get('https://example.com/dec1'),
+    '{"a":1}',
+    'text/plain decodes as text by default'
+  );
+  t.deepEqual(
+    await io.get('https://example.com/dec2', null, {decode: 'json'}),
+    {a: 1},
+    'decode json overrides the content type'
+  );
   reset();
 });
 

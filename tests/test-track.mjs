@@ -65,3 +65,23 @@ test('track passes non-GET through to the transport', async t => {
   t.equal(method, 'POST', 'POST is not deduped');
   reset();
 });
+
+test('track is GET-only: track:true does not dedupe POSTs', async t => {
+  let calls = 0;
+  serve(() => json({n: ++calls}));
+  await Promise.all([
+    io.post('https://example.com/p', {a: 1}, {track: true}),
+    io.post('https://example.com/p', {a: 2}, {track: true})
+  ]);
+  t.equal(calls, 2, 'each POST hits the transport');
+  reset();
+});
+
+test("track: 'wait' on a non-GET throws", async t => {
+  try {
+    await io.post('https://example.com/w', null, {track: 'wait'});
+    t.fail('expected a throw');
+  } catch (error) {
+    t.ok(error instanceof TypeError, 'TypeError for a non-trackable wait');
+  }
+});

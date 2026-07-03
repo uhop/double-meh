@@ -1,6 +1,5 @@
-import io from './io.js';
+import io, {createIO} from './io.js';
 import {fetchTransport} from './transports/fetch.js';
-import {installEvents} from './events.js';
 import {installTrack} from './services/track.js';
 import {installCache} from './services/cache.js';
 import {installRetry} from './services/retry.js';
@@ -8,21 +7,27 @@ import {installMock} from './services/mock.js';
 import {installHelpers} from './helpers.js';
 import {installCodeForward} from './code-forward.js';
 
-io.registerTransport('fetch', fetchTransport);
-io.defaultTransport = fetchTransport;
+const assemble = instance => {
+  instance.registerTransport('fetch', fetchTransport);
+  instance.defaultTransport = fetchTransport;
+  installTrack(instance);
+  instance.track.attach();
+  installCache(instance);
+  instance.cache.attach();
+  installRetry(instance);
+  instance.retry.attach();
+  installMock(instance);
+  installHelpers(instance);
+  instance.create = () => assemble(createIO());
+  return instance;
+};
 
-installEvents(io);
-installTrack(io);
-io.track.attach();
-installCache(io);
-io.cache.attach();
-installRetry(io);
-io.retry.attach();
-installMock(io);
-installHelpers(io);
+assemble(io);
 installCodeForward(io);
 
 export default io;
+export {createIO};
+export const create = io.create;
 export const get = io.get;
 export const head = io.head;
 export const post = io.post;
@@ -39,6 +44,5 @@ export const retry = io.retry;
 export const mock = io.mock;
 export const update = io.update;
 export const stream = io.stream;
-export {ios} from './io.js';
 export {installCodeForward} from './code-forward.js';
-export {FailedIO, BadStatus, TimedOut} from './envelope.js';
+export {IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';
