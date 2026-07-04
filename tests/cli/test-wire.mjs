@@ -4,9 +4,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import {create} from '../src/index.js';
-import {fsStorage} from '../src/storage/fs.js';
-import fixtures from './server/fixtures.js';
+import {create} from '../../src/index.js';
+import {fsStorage} from '../../src/storage/fs.js';
+import fixtures from '../server/fixtures.js';
 
 const OPTIONS = {plugins: [fixtures]};
 

@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import {fsStorage} from '../src/storage/fs.js';
-import {io, json, serve, reset} from './helper.mjs';
+import {fsStorage} from '../../src/storage/fs.js';
+import {io, json, serve, reset} from '../helper.mjs';
 
 const tempDir = () => fs.mkdtemp(path.join(os.tmpdir(), 'dm-fs-'));
 

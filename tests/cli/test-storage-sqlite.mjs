@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from '../helper.mjs';
 
 const isDeno = typeof Deno !== 'undefined';
 
@@ -17,7 +17,7 @@ const entry = (body, extra = {}) => ({
 });
 
 test('sqlite storage: refuses Deno', {skip: !isDeno}, async t => {
-  const {sqliteStorage} = await import('../src/storage/sqlite.js');
+  const {sqliteStorage} = await import('../../src/storage/sqlite.js');
   try {
     await sqliteStorage({database: ':memory:'});
     t.fail('expected sqliteStorage to throw on Deno');
@@ -27,7 +27,7 @@ test('sqlite storage: refuses Deno', {skip: !isDeno}, async t => {
 });
 
 test('sqlite storage: set/get roundtrip preserves the entry', {skip: isDeno}, async t => {
-  const {sqliteStorage} = await import('../src/storage/sqlite.js');
+  const {sqliteStorage} = await import('../../src/storage/sqlite.js');
   const storage = await sqliteStorage({database: ':memory:'});
   await storage.set('GET https://example.com/a', entry('{"a":1}', {etag: '"v1"'}));
   const got = await storage.get('GET https://example.com/a');
@@ -40,7 +40,7 @@ test('sqlite storage: set/get roundtrip preserves the entry', {skip: isDeno}, as
 });
 
 test('sqlite storage: delete, keys, clear', {skip: isDeno}, async t => {
-  const {sqliteStorage} = await import('../src/storage/sqlite.js');
+  const {sqliteStorage} = await import('../../src/storage/sqlite.js');
   const storage = await sqliteStorage({database: ':memory:'});
   await storage.set('GET https://example.com/1', entry('{"n":1}'));
   await storage.set('GET https://example.com/2', entry('{"n":2}'));
@@ -57,7 +57,7 @@ test('sqlite storage: delete, keys, clear', {skip: isDeno}, async t => {
 });
 
 test('sqlite storage: entries persist across re-open', {skip: isDeno}, async t => {
-  const {sqliteStorage} = await import('../src/storage/sqlite.js');
+  const {sqliteStorage} = await import('../../src/storage/sqlite.js');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'dm-sqlite-'));
   const database = path.join(dir, 'cache.sqlite');
   const first = await sqliteStorage({database});
@@ -72,7 +72,7 @@ test('sqlite storage: entries persist across re-open', {skip: isDeno}, async t =
 });
 
 test('sqlite storage: drives the cache service end-to-end', {skip: isDeno}, async t => {
-  const {sqliteStorage} = await import('../src/storage/sqlite.js');
+  const {sqliteStorage} = await import('../../src/storage/sqlite.js');
   const saved = io.cache.storage;
   const storage = await sqliteStorage({database: ':memory:'});
   io.cache.storage = storage;

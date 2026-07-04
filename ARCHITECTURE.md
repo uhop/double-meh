@@ -29,7 +29,8 @@ src/                      # Source code (plain ESM, no build step; published as-
 ├── transports/
 │   └── fetch.js          # The one core transport
 └── *.d.ts                # Hand-written TypeScript declarations (kept in sync per module)
-tests/                    # Test files (test-*.mjs, test-*.mts, using tape-six)
+tests/                    # Universal tests (tape-six); cli/ = Node/Bun/Deno-only, web/ = browser-only,
+                          # server/ = tape6-server wire fixtures (echo/status/delay/etag/jsonl/sse/upload)
 dev-docs/                 # Internal developer documentation (design.md, parity survey)
 wiki/                     # GitHub wiki documentation (git submodule)
 .github/                  # CI workflows, Dependabot config
@@ -75,6 +76,9 @@ src/storage/cache-api.js                                 (opt-in import)
 - **Run single file**: `node tests/test-<name>.mjs`
 - **Run with Bun**: `npm run test:bun`
 - **Run with Deno**: `npm run test:deno`
+- **Run in a browser**: `npm run test:browser` (Chromium via tape-six-playwright, h1);
+  `npm run test:browser:h2` switches the test server to HTTP/2, which un-skips the Chromium-only
+  `io.stream` duplex upload-streaming suite (`tests/web/test-web-duplex.mjs`)
 - **Run sequential**: `npm run test:seq` (also `test:seq:bun`, `test:seq:deno`)
 - **TypeScript check**: `npm run ts-check`
 - **JS implementation check**: `npm run js-check` (checkJs over `src/`)

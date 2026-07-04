@@ -25,6 +25,7 @@ npm install
 - **Test (Deno):** `npm run test:deno`
 - **Test (sequential):** `npm run test:seq` (also `test:seq:bun`, `test:seq:deno`)
 - **Test (single file):** `node tests/test-<name>.mjs`
+- **Test (browser, Chromium via Playwright):** `npm run test:browser`; `npm run test:browser:h2` adds HTTP/2 (enables the duplex upload-streaming suite)
 - **TypeScript check (`.d.ts`/`.mts` contracts):** `npm run ts-check`
 - **JS implementation check (`checkJs` over `src/`):** `npm run js-check`
 - **TypeScript tests:** `npm run ts-test` (also `ts-test:bun`, `ts-test:deno`)
@@ -46,7 +47,7 @@ double-meh/
 │   ├── services/         # track, cache, retry, mock
 │   ├── storage/          # cache backends: memory (default), fs, sqlite, cache-api
 │   └── transports/       # fetch
-├── tests/                # Test files (test-*.mjs, test-*.mts); server/ holds wire fixtures
+├── tests/                # Universal test files; cli/ = runtime-only, web/ = browser-only, server/ = wire fixtures
 ├── dev-docs/             # Internal developer documentation (design.md)
 ├── wiki/                 # GitHub wiki documentation (git submodule)
 └── .github/              # CI workflows, Dependabot config
