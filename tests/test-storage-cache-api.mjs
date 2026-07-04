@@ -22,6 +22,7 @@ test('cache-api storage: set/get roundtrip preserves the entry', {skip: !hasCach
     'GET https://example.com/a',
     entry('{"a":1}', {
       etag: '"v1"',
+      vary: {'x-tenant': 'a'},
       headers: [
         ['content-type', 'application/json'],
         ['etag', '"v1"']
@@ -33,6 +34,7 @@ test('cache-api storage: set/get roundtrip preserves the entry', {skip: !hasCach
   t.equal(got.status, 200, 'status preserved');
   t.equal(got.etag, '"v1"', 'etag preserved');
   t.equal(got.expiresAt, Infinity, 'Infinity expiry survives the header roundtrip');
+  t.deepEqual(got.vary, {'x-tenant': 'a'}, 'vary snapshot preserved');
   t.ok(
     got.headers.every(([header]) => !header.startsWith('x-io-')),
     'synthetic headers stripped'

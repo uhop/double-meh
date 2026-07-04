@@ -63,6 +63,7 @@ export const sqliteStorage = async ({database, name = 'double-meh'} = {}) => {
         lastModified: meta.lastModified ?? undefined,
         // JSON has no Infinity: null marks "never expires"
         expiresAt: meta.expiresAt == null ? Infinity : meta.expiresAt,
+        vary: meta.vary ?? undefined,
         body: toArrayBuffer(row.body)
       };
     },
@@ -73,7 +74,8 @@ export const sqliteStorage = async ({database, name = 'double-meh'} = {}) => {
         headers: entry.headers,
         etag: entry.etag,
         lastModified: entry.lastModified,
-        expiresAt: entry.expiresAt === Infinity ? null : entry.expiresAt
+        expiresAt: entry.expiresAt === Infinity ? null : entry.expiresAt,
+        vary: entry.vary
       };
       setStmt.run(key, JSON.stringify(meta), new Uint8Array(entry.body));
     },

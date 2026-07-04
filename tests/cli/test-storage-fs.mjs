@@ -20,12 +20,16 @@ const entry = (body, extra = {}) => ({
 test('fs storage: set/get roundtrip preserves the entry', async t => {
   const directory = await tempDir();
   const storage = fsStorage({directory});
-  await storage.set('GET https://example.com/a', entry('{"a":1}', {etag: '"v1"'}));
+  await storage.set(
+    'GET https://example.com/a',
+    entry('{"a":1}', {etag: '"v1"', vary: {'x-tenant': 'a', 'accept-language': null}})
+  );
   const got = await storage.get('GET https://example.com/a');
   t.ok(got, 'entry retrieved');
   t.equal(got.status, 200, 'status preserved');
   t.equal(got.etag, '"v1"', 'etag preserved');
   t.equal(got.expiresAt, Infinity, 'Infinity expiry survives the JSON roundtrip');
+  t.deepEqual(got.vary, {'x-tenant': 'a', 'accept-language': null}, 'vary snapshot preserved');
   t.deepEqual(got.headers, [['content-type', 'application/json']], 'headers preserved');
   t.equal(new TextDecoder().decode(got.body), '{"a":1}', 'body bytes preserved');
   await fs.rm(directory, {recursive: true, force: true});

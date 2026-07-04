@@ -58,6 +58,7 @@ export const fsStorage = ({directory, name = 'double-meh'} = {}) => {
         lastModified: meta.lastModified ?? undefined,
         // JSON has no Infinity: null marks "never expires"
         expiresAt: meta.expiresAt == null ? Infinity : meta.expiresAt,
+        vary: meta.vary ?? undefined,
         body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
       };
     },
@@ -70,7 +71,8 @@ export const fsStorage = ({directory, name = 'double-meh'} = {}) => {
         headers: entry.headers,
         etag: entry.etag,
         lastModified: entry.lastModified,
-        expiresAt: entry.expiresAt === Infinity ? null : entry.expiresAt
+        expiresAt: entry.expiresAt === Infinity ? null : entry.expiresAt,
+        vary: entry.vary
       };
       const file = path.join(dir, fileName(key));
       const temp = file + '.' + randomUUID() + '.tmp'; // same dir: rename stays atomic

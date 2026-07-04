@@ -28,6 +28,8 @@ export const installTrack = io => {
   // GET-only by design: sharing one decoded envelope is only sound for safe reads
   const optIn = options => {
     if (options.stream) return false;
+    // the envelope is decoded once, with the leader's decode — a custom decode must not be shared
+    if (options.decode !== undefined) return false;
     if ((options.method || 'GET').toUpperCase() !== 'GET') return false;
     if (options.track !== undefined) return !!options.track;
     const d = io.track.theDefault;

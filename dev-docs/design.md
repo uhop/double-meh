@@ -295,9 +295,13 @@ Formal key: `METHOD` (upper) + a canonical URL, normalized via the WHATWG `URL`:
 
 Computed on the **post-inspector** URL, so a virtual-host/rewrite inspector and a prelude that fired the
 already-final URL still match (the code-forward seam). Key only — the **wire URL is sent as built**, so
-signed URLs (SigV4 query, presigned links) aren't reordered. The **cache** extends the base key with a
-`Vary` dimension (the request-header values the response's `Vary` names); `track`/`adopt` use the base
-key. `io.makeKey(options)` is exposed so callers can compute it themselves.
+signed URLs (SigV4 query, presigned links) aren't reordered. _(built 2026-07-03:)_ the key folds in a
+**representation dimension** — the effective `Accept`, normalized so the prepared default
+(`application/json`) stays on the base key — shared by cache, track, and adopt, so variants coexist in
+the cache and concurrent different-`Accept` GETs don't share one envelope. The **cache** additionally
+snapshots the request-header values the response's `Vary` names (mismatch → miss; one variant per key;
+`Vary: *` → never stored). A `decode` override opts out of track's shared envelope (the cache is
+byte-level and unaffected). `io.makeKey(options)` is exposed so callers can compute it themselves.
 
 ## Services (priority middleware)
 

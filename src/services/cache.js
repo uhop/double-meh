@@ -1,14 +1,37 @@
 import {canonicalUrl} from '../key.js';
 import {memoryStorage} from '../storage/memory.js';
 
-const toEntry = async (response, ttl) => ({
+// null = Vary: * (uncacheable); undefined = no Vary; else the selecting request-header snapshot
+const varyOf = (response, requestHeaders) => {
+  const vary = response.headers.get('vary');
+  if (!vary) return undefined;
+  const fields = {};
+  for (const part of vary.split(',')) {
+    const name = part.trim().toLowerCase();
+    if (!name) continue;
+    if (name === '*') return null;
+    fields[name] = (requestHeaders && requestHeaders.get(name)) ?? null;
+  }
+  return fields;
+};
+
+const varyMatches = (entry, requestHeaders) => {
+  if (!entry.vary) return true;
+  for (const [name, value] of Object.entries(entry.vary)) {
+    if (((requestHeaders && requestHeaders.get(name)) ?? null) !== value) return false;
+  }
+  return true;
+};
+
+const toEntry = async (response, ttl, requestHeaders) => ({
   status: response.status,
   statusText: response.statusText,
   headers: [...response.headers],
   body: await response.arrayBuffer(),
   etag: response.headers.get('etag') || undefined,
   lastModified: response.headers.get('last-modified') || undefined,
-  expiresAt: ttl === Infinity ? Infinity : Date.now() + ttl
+  expiresAt: ttl === Infinity ? Infinity : Date.now() + ttl,
+  vary: varyOf(response, requestHeaders)
 });
 
 const toResponse = entry =>
@@ -60,7 +83,8 @@ export const installCache = io => {
   const handle = async (request, ctx, next) => {
     if (!optIn(ctx.options)) return null;
     const key = ctx.key;
-    const entry = await io.cache.storage.get(key);
+    let entry = await io.cache.storage.get(key);
+    if (entry && !varyMatches(entry, request.headers)) entry = undefined; // another variant: a miss
     if (entry && entry.expiresAt > Date.now()) return toResponse(entry);
     if (entry && entry.etag) request.headers.set('If-None-Match', entry.etag);
     else if (entry && entry.lastModified)
@@ -71,8 +95,8 @@ export const installCache = io => {
       return toResponse(entry);
     }
     if (response.ok) {
-      const stored = await toEntry(response, ttlFor(ctx.options));
-      await io.cache.storage.set(key, stored);
+      const stored = await toEntry(response, ttlFor(ctx.options), request.headers);
+      if (stored.vary !== null) await io.cache.storage.set(key, stored); // Vary: * is uncacheable
       return toResponse(stored);
     }
     return response;
@@ -112,7 +136,9 @@ export const installCache = io => {
           const prefix = 'GET ' + canonicalUrl(text.slice(0, -1));
           await evictBy(key => key.startsWith(prefix));
         } else {
-          await io.cache.storage.delete(io.makeKey({url: text}));
+          // an exact URL owns all of its accept variants
+          const exact = io.makeKey({url: text});
+          await evictBy(key => key === exact || key.startsWith(exact + ' accept='));
         }
       }
       return io;
@@ -132,8 +158,12 @@ export const installCache = io => {
     save: (target, response, ttl) =>
       watch(
         (async () => {
-          const entry = await toEntry(response, ttl == null ? io.cache.defaultTtl : ttl);
-          await io.cache.storage.set(keyOf(target), entry);
+          const bag = typeof target === 'string' ? {url: target} : target;
+          const headers = new Headers(bag.headers || undefined);
+          if (bag.accept) headers.set('accept', bag.accept);
+          if (!headers.has('accept')) headers.set('accept', 'application/json'); // prepare's default
+          const entry = await toEntry(response, ttl == null ? io.cache.defaultTtl : ttl, headers);
+          if (entry.vary !== null) await io.cache.storage.set(keyOf(target), entry);
           return io;
         })()
       ),

@@ -2,6 +2,7 @@
 const BASE = 'https://io-cache.invalid/';
 const EXPIRES = 'x-io-expires-at';
 const KEY = 'x-io-key';
+const VARY = 'x-io-vary';
 
 const urlOf = key => BASE + encodeURIComponent(key);
 
@@ -14,9 +15,16 @@ export const cacheApiStorage = ({name = 'double-meh'} = {}) => {
       const response = await (await open()).match(urlOf(key));
       if (!response) return undefined;
       const expires = response.headers.get(EXPIRES);
+      const vary = response.headers.get(VARY);
       const headers = [...response.headers].filter(
-        ([header]) => header !== EXPIRES && header !== KEY
+        ([header]) => header !== EXPIRES && header !== KEY && header !== VARY
       );
+      let varyFields;
+      try {
+        varyFields = vary == null ? undefined : JSON.parse(vary);
+      } catch {
+        varyFields = undefined;
+      }
       return {
         status: response.status,
         statusText: response.statusText,
@@ -24,6 +32,7 @@ export const cacheApiStorage = ({name = 'double-meh'} = {}) => {
         etag: response.headers.get('etag') || undefined,
         lastModified: response.headers.get('last-modified') || undefined,
         expiresAt: expires == null || expires === 'infinity' ? Infinity : Number(expires),
+        vary: varyFields,
         body: await response.arrayBuffer()
       };
     },
@@ -31,6 +40,7 @@ export const cacheApiStorage = ({name = 'double-meh'} = {}) => {
       const headers = new Headers(entry.headers);
       headers.set(KEY, key);
       headers.set(EXPIRES, entry.expiresAt === Infinity ? 'infinity' : String(entry.expiresAt));
+      if (entry.vary) headers.set(VARY, JSON.stringify(entry.vary));
       await (
         await open()
       ).put(

@@ -75,4 +75,23 @@ export const canonicalUrl = rawUrl => {
   return url.href;
 };
 
-export const requestKey = (method, url) => method.toUpperCase() + ' ' + canonicalUrl(url);
+const DEFAULT_ACCEPT = 'application/json';
+
+// the prepared default folds to the base key, so an explicit application/json and none are one identity
+export const requestKey = (method, url, accept) => {
+  const base = method.toUpperCase() + ' ' + canonicalUrl(url);
+  return accept && accept !== DEFAULT_ACCEPT ? base + ' accept=' + accept : base;
+};
+
+export const acceptOf = options => {
+  if (options.accept) return options.accept;
+  const headers = options.headers;
+  if (!headers) return undefined;
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+    return headers.get('accept') || undefined;
+  }
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === 'accept') return value;
+  }
+  return undefined;
+};

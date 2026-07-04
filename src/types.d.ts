@@ -263,6 +263,8 @@ export interface CacheEntry {
   etag?: string;
   lastModified?: string;
   expiresAt: number;
+  /** Selecting request-header snapshot named by the response's `Vary`; a mismatch is a miss. */
+  vary?: {[header: string]: string | null};
 }
 
 export interface CacheStorage {

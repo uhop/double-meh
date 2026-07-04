@@ -1,4 +1,4 @@
-import {buildUrl, requestKey} from './key.js';
+import {acceptOf, buildUrl, requestKey} from './key.js';
 import {makeEnvelope, IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';
 
 const readVerbs = {GET: 1, HEAD: 1, OPTIONS: 1, DELETE: 1};
@@ -416,7 +416,12 @@ export const createIO = () => {
       const result = await fn(request, options);
       if (result) request = result;
     }
-    const ctx = {options, key: requestKey(request.method, request.url), userSignal, timeoutSignal};
+    const ctx = {
+      options,
+      key: requestKey(request.method, request.url, request.headers.get('accept')),
+      userSignal,
+      timeoutSignal
+    };
     const track = io.track;
     const wait = options.track === 'wait';
     const opted = track && track.active && track.optIn(options);
@@ -484,7 +489,8 @@ export const createIO = () => {
     const ctx = {options: normalized, key: io.makeKey(normalized)};
     return finalize(response, ctx, normalized.url);
   };
-  io.makeKey = options => requestKey((options.method || 'GET').toUpperCase(), buildUrl(options));
+  io.makeKey = options =>
+    requestKey((options.method || 'GET').toUpperCase(), buildUrl(options), acceptOf(options));
   io.buildUrl = buildUrl;
   io.IOError = IOError;
   io.FailedIO = FailedIO;
