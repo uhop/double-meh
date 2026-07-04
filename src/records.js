@@ -1,3 +1,4 @@
+// @ts-self-types="./records.d.ts"
 import {BadStatus, FailedIO} from './envelope.js';
 
 const abortError = signal =>

@@ -1,3 +1,4 @@
+// @ts-self-types="./sqlite.d.ts"
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -23,9 +24,11 @@ const openDatabase = async file => {
 const toArrayBuffer = bytes =>
   bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
-/** @param {{database?: string, name?: string}} [options] */
-export const sqliteStorage = async ({database, name = 'double-meh'} = {}) => {
-  // decision: never Deno — no built-in driver, and a dependency is off the zero-dep path
+export const sqliteStorage = async (options = {}) => {
+  const {database, name = 'double-meh'} = /** @type {{database?: string, name?: string}} */ (
+    options
+  );
+  // never Deno: no built-in driver, and a dependency is off the zero-dep path
   if (runtime.Deno !== undefined)
     throw new Error('io: the SQLite backend is not supported on Deno');
   let file = database;

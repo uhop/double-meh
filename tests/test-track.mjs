@@ -85,3 +85,66 @@ test("track: 'wait' on a non-GET throws", async t => {
     t.ok(error instanceof TypeError, 'TypeError for a non-trackable wait');
   }
 });
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+test('the leader’s abort detaches only the leader; a follower survives', async t => {
+  let calls = 0;
+  serve(async () => {
+    ++calls;
+    await sleep(30);
+    return json({ok: true});
+  });
+  const leader = new AbortController();
+  const a = io.get('https://example.com/refcount1', null, {signal: leader.signal});
+  const b = io.get('https://example.com/refcount1');
+  await sleep(5);
+  leader.abort();
+  const [ra, rb] = await Promise.allSettled([a, b]);
+  t.equal(ra.status, 'rejected', 'the aborting caller rejects');
+  t.equal(rb.status, 'fulfilled', 'the follower still gets the response');
+  t.deepEqual(rb.value, {ok: true}, 'with the real body');
+  t.equal(calls, 1, 'one deduped request served the survivor');
+  reset();
+});
+
+test('the wire aborts only when the last waiter leaves', async t => {
+  let seen;
+  serve(async request => {
+    seen = request;
+    await sleep(30);
+    return json({ok: true});
+  });
+  const one = new AbortController();
+  const two = new AbortController();
+  const a = io.get('https://example.com/refcount2', null, {signal: one.signal});
+  const b = io.get('https://example.com/refcount2', null, {signal: two.signal});
+  await sleep(5);
+  one.abort();
+  t.notOk(seen.signal.aborted, 'the wire survives the first abort');
+  two.abort();
+  const [ra, rb] = await Promise.allSettled([a, b]);
+  t.equal(ra.status, 'rejected', 'first caller rejected');
+  t.equal(rb.status, 'rejected', 'second caller rejected');
+  t.ok(seen.signal.aborted, 'the wire aborted when the last waiter left');
+  reset();
+});
+
+test('a follower’s abort never touches the leader', async t => {
+  let seen;
+  serve(async request => {
+    seen = request;
+    await sleep(30);
+    return json({ok: true});
+  });
+  const follower = new AbortController();
+  const a = io.get('https://example.com/refcount3');
+  const b = io.get('https://example.com/refcount3', null, {signal: follower.signal});
+  await sleep(5);
+  follower.abort();
+  const [ra, rb] = await Promise.allSettled([a, b]);
+  t.equal(ra.status, 'fulfilled', 'the leader completes');
+  t.equal(rb.status, 'rejected', 'the aborting follower rejects');
+  t.notOk(seen.signal.aborted, 'the wire was never aborted');
+  reset();
+});

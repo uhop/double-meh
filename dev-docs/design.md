@@ -336,7 +336,10 @@ decoded **envelope** — so the body is decoded **once** and every concurrent ca
 `heya/io` shared the decoded result for the same reason.) It is **GET-only and skips `stream: true`** — a
 stream is single-consumer, so it can't be handed to two readers (matching the original "streams aren't
 deduped" behavior). On by default; `io.track.detach()` turns it off. `io.adopt` / `fly` / `arrived` build
-on its deferreds, which resolve to envelopes via `io.toEnvelope`.
+on its deferreds, which resolve to envelopes via `io.toEnvelope`. _(built 2026-07-04:)_ cancellation is
+**refcounted** — the wire request runs on the entry's own `AbortController`; a caller's abort detaches
+only that caller (its promise rejects with its own error), and the wire aborts when the last waiter
+leaves. This replaced the earlier shared fate where the leader's abort rejected all followers.
 
 ### cache
 
@@ -646,8 +649,13 @@ repo unless a piece proves large.
 ESM throughout; zero runtime dependencies; Prettier (100 width, single quotes, no bracket spacing, no
 trailing commas, arrow-parens avoid); `tape-six` across node/bun/deno + TS typing tests; naked version
 tags (no `v` prefix); BSD-3-Clause. **ESM-only, decided:** no CJS build — `require(esm)` covers CJS
-consumers, backed by the declared `engines.node >= 20.19` floor and the standing invariant that the
-module graph carries **no top-level await** (a sync `require` path must stay sync).
+consumers (Node ≥ 20.19 / ≥ 22.12 on the consumer side), backed by the standing invariant that the
+module graph carries **no top-level await** (a sync `require` path must stay sync; enforced by
+`tests/cli/test-no-tla.mjs`). **`engines.node >= 20.3` is the code floor, not the support floor**
+(decided 2026-07-04): it names the newest API the default graph actually uses — `AbortSignal.any`,
+Node 20.3 — everything else is ≤ 18 (fetch/streams globals). Older Node runs best-effort; CI tests
+only non-EOL versions per the fleet matrix. Opt-in modules carry their own feature detection
+(`node:sqlite` ≥ 22.5, zlib zstd where present) and don't raise the package floor.
 
 ### Bundlers
 

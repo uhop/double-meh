@@ -1,3 +1,4 @@
+// @ts-self-types="./io.d.ts"
 import {acceptOf, buildUrl, requestKey} from './key.js';
 import {makeEnvelope, IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';
 
@@ -317,6 +318,12 @@ export const createIO = () => {
       if (result) envelope = result;
     }
     if (!envelope.ok && !options.ignoreBadStatus) {
+      // stream mode hands the error body to no reader — release the connection
+      if (options.stream && data && typeof data.cancel === 'function') {
+        try {
+          await data.cancel();
+        } catch {}
+      }
       throw new BadStatus(envelope.response || response, envelope.data, baseUrl, options);
     }
     return envelope;
@@ -379,26 +386,31 @@ export const createIO = () => {
     }
   };
 
+  const callerAbortError = ctx =>
+    ctx.timeoutSignal && ctx.timeoutSignal.aborted && !(ctx.userSignal && ctx.userSignal.aborted)
+      ? new TimedOut(undefined, ctx.options, {cause: ctx.options.signal.reason})
+      : abortError(ctx.options.signal);
+
   const waitFor = (entry, ctx) => {
     const signal = ctx.options.signal;
     if (!signal) return entry.promise;
     return new Promise((resolve, reject) => {
-      const fail = () =>
-        reject(
-          ctx.timeoutSignal &&
-            ctx.timeoutSignal.aborted &&
-            !(ctx.userSignal && ctx.userSignal.aborted)
-            ? new TimedOut(undefined, ctx.options, {cause: signal.reason})
-            : abortError(signal)
-        );
+      const fail = () => reject(callerAbortError(ctx));
       if (signal.aborted) return void fail();
       const onAbort = () => fail();
       signal.addEventListener('abort', onAbort, {once: true});
-      const settle = fn => value => {
-        signal.removeEventListener('abort', onAbort);
-        fn(value);
-      };
-      entry.promise.then(settle(resolve), settle(reject));
+      entry.promise.then(
+        value => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(value);
+        },
+        error => {
+          signal.removeEventListener('abort', onAbort);
+          // an aborted caller always gets its own error, never the wire's raw shutdown reason
+          if (signal.aborted && isAbort(error)) return void fail();
+          reject(error);
+        }
+      );
     });
   };
 
@@ -429,10 +441,31 @@ export const createIO = () => {
       throw new TypeError("io: track 'wait' requires a trackable GET request");
     }
     if (opted) {
+      if (options.signal && options.signal.aborted) {
+        return Promise.reject(callerAbortError(ctx));
+      }
       const entry = track.flyByKey(ctx.key);
+      // refcounted cancellation: the wire runs on the entry's own signal; a caller's abort
+      // detaches only that caller, and the wire aborts when the last waiter leaves
+      if (entry.waiters === undefined) {
+        entry.waiters = 0;
+        entry.controller = new AbortController();
+      }
+      ++entry.waiters;
+      const callerSignal = options.signal;
+      if (callerSignal) {
+        const detach = () => {
+          if (--entry.waiters === 0) entry.controller.abort(callerSignal.reason);
+        };
+        callerSignal.addEventListener('abort', detach, {once: true});
+        const unhook = () => callerSignal.removeEventListener('abort', detach);
+        entry.promise.then(unhook, unhook);
+      }
       if (!wait && !entry.flying) {
         entry.flying = true;
-        execute(request, ctx).then(entry.resolve, entry.reject);
+        request.signal = entry.controller.signal;
+        const runCtx = {options: {...options, signal: entry.controller.signal}, key: ctx.key};
+        execute(request, runCtx).then(entry.resolve, entry.reject);
       }
       return waitFor(entry, ctx);
     }
@@ -456,8 +489,7 @@ export const createIO = () => {
   io.del = io.remove = io.delete;
   io.full.del = io.full.remove = io.full.delete;
 
-  // request-body streaming duplex for writes: `writable` streams up (duplex:'half'),
-  // `readable` is the streamed response, `.response` resolves at headers-time
+  // `.response` resolves at headers-time, before either side finishes
   const streamDuplex = options => {
     const reqSide = new TransformStream();
     const resSide = new TransformStream();

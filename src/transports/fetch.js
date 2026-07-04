@@ -1,3 +1,4 @@
+// @ts-self-types="./fetch.d.ts"
 const isReadableStream = body =>
   body != null && typeof body === 'object' && typeof body.getReader === 'function';
 

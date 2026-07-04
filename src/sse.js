@@ -1,3 +1,4 @@
+// @ts-self-types="./sse.d.ts"
 import {isAbort, FailedIO} from './envelope.js';
 import {lines, parsedBadStatus} from './records.js';
 

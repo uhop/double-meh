@@ -1,3 +1,4 @@
+// @ts-self-types="./code-forward.d.ts"
 const KEY = '__doubleMeh';
 
 const normalize = target => (typeof target === 'string' ? {url: target} : target);

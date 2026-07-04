@@ -1,3 +1,4 @@
+// @ts-self-types="./cache-dir.d.ts"
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';

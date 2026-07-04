@@ -1,3 +1,4 @@
+// @ts-self-types="./index.d.ts"
 import io, {createIO} from './io.js';
 import {fetchTransport} from './transports/fetch.js';
 import {installTrack} from './services/track.js';

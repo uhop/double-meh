@@ -1,3 +1,4 @@
+// @ts-self-types="./envelope.d.ts"
 const weakRe = /^W\//;
 
 const parseHeaders = response => {

@@ -1,3 +1,4 @@
+// @ts-self-types="./fs.d.ts"
 import {createHash, randomUUID} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -19,8 +20,10 @@ const parseMeta = buffer => {
   }
 };
 
-/** @param {{directory?: string, name?: string}} [options] */
-export const fsStorage = ({directory, name = 'double-meh'} = {}) => {
+export const fsStorage = (options = {}) => {
+  const {directory, name = 'double-meh'} = /** @type {{directory?: string, name?: string}} */ (
+    options
+  );
   const dir = directory || appCacheDir(name);
   let prepared;
   const prepare = () => (prepared ||= fs.mkdir(dir, {recursive: true}));

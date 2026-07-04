@@ -1,3 +1,4 @@
+// @ts-self-types="./helpers.d.ts"
 const CONFLICT_RETRIES = 3;
 const URL_LIMIT = 2000;
 

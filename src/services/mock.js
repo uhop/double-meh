@@ -1,3 +1,4 @@
+// @ts-self-types="./mock.d.ts"
 import {canonicalUrl} from '../key.js';
 
 const toResponse = async value => {

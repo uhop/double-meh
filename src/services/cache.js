@@ -1,3 +1,4 @@
+// @ts-self-types="./cache.d.ts"
 import {canonicalUrl} from '../key.js';
 import {memoryStorage} from '../storage/memory.js';
 
@@ -59,7 +60,6 @@ export const installCache = io => {
     return c && typeof c === 'object' && typeof c.ttl === 'number' ? c.ttl : io.cache.defaultTtl;
   };
 
-  // GETs are cached by default; `cache: false` opts a request out
   const optIn = options => {
     if (options.stream || options.bust) return false;
     if ((options.method || 'GET').toUpperCase() !== 'GET') return false;

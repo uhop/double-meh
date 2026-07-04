@@ -1,3 +1,4 @@
+// @ts-self-types="./key.d.ts"
 const noBody = {GET: 1, HEAD: 1, OPTIONS: 1};
 
 const base = () => (typeof location !== 'undefined' && location ? location.href : undefined);

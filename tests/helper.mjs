@@ -11,8 +11,7 @@ export const json = (data, init = {}) =>
 
 const ANY = () => true;
 
-// Serve every request with `handler(request, ctx)` via a catch-all mock — replaces
-// hand-rolled `io.defaultTransport` overrides. The handler returns a Response or any value.
+// a catch-all mock, not a transport override: the full pipeline stays engaged
 export const serve = handler => io.mock(ANY, handler);
 
 export const reset = () => {

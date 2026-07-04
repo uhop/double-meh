@@ -61,13 +61,14 @@ double-meh/
 - **Prettier** for formatting (see `.prettierrc`): 100 char width, single quotes, no bracket spacing, no trailing commas, arrow parens "avoid".
 - 2-space indentation.
 - Semicolons are enforced by Prettier (default `semi: true`).
+- **No JSDoc in `.js` files** — each module's `.d.ts` sidecar is the sole source of truth for types and docs, and every `src/*.js` carries `// @ts-self-types="./<file>.d.ts"` at the top. Inline `/** @type {...} */` casts needed by `js-check` are tooling, not docs, and are fine.
+- **Comments are short _why_-markers only** — a non-trivial decision or constraint, an algorithm reference, or a footgun/ordering caveat backed by a real reason. Never narrate _what_ the code does; longer explanations go to `dev-docs/` or the wiki.
 - The npm package name is `double-meh`.
 
 ## Critical rules
 
 - **Zero runtime dependencies.** Never add packages to `dependencies`. Only `devDependencies` are allowed.
 - **Do not modify or delete test expectations** without understanding why they changed.
-- **Do not add comments or remove comments** unless explicitly asked.
 - **Keep `.js` and `.d.ts` files in sync** for all modules under `src/`.
 
 <!-- TODO: Add project-specific critical rules as the codebase develops -->

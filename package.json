@@ -14,7 +14,7 @@
   "author": "Eugene Lazutkin <eugene.lazutkin@gmail.com> (https://www.lazutkin.com/)",
   "type": "module",
   "engines": {
-    "node": ">=20.19"
+    "node": ">=20.3"
   },
   "sideEffects": [
     "./src/index.js"

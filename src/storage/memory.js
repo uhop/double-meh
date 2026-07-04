@@ -1,3 +1,4 @@
+// @ts-self-types="./memory.d.ts"
 export const memoryStorage = () => {
   const map = new Map();
   return {

@@ -1,3 +1,4 @@
+// @ts-self-types="./encoders.d.ts"
 const isReadableStream = data =>
   data != null && typeof data === 'object' && typeof data.getReader === 'function';
 
@@ -28,7 +29,7 @@ export const installEncoders = io => {
     }
     const wasStream = isReadableStream(request.body);
     const source = wasStream ? request.body : new Response(request.body).body;
-    if (!source) return; // an empty body: nothing to compress
+    if (!source) return; // new Response('').body is null on some platforms
     const compressed = await encoder(source, options);
     // a buffered body stays buffered: keeps Content-Length semantics and works over h1 everywhere
     request.body = wasStream ? compressed : await new Response(compressed).arrayBuffer();

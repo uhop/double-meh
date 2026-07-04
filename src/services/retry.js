@@ -1,3 +1,4 @@
+// @ts-self-types="./retry.d.ts"
 import {isAbort} from '../envelope.js';
 
 const isReadableStream = body =>
@@ -34,7 +35,6 @@ const safeToRetry = options => {
 };
 
 export const installRetry = io => {
-  // retry: true | n | {retries, initDelay, force, nextDelay, continueRetries}
   // retries: 0 + continueRetries → polling driven solely by the predicate
   const normalize = options => {
     const r = options.retry;

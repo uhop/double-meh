@@ -1,3 +1,4 @@
+// @ts-self-types="./track.d.ts"
 const makeDeferred = () => {
   let resolve;
   let reject;

@@ -1,3 +1,4 @@
+// @ts-self-types="./zlib.d.ts"
 // opt-in CLI module: keeps node:zlib out of the default browser graph (same pattern as storage/sqlite.js)
 export const installZlibEncoders = async io => {
   let zlib, Duplex;

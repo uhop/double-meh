@@ -31,7 +31,8 @@ src/                      # Source code (plain ESM, no build step; published as-
 │   └── cache-dir.js      # OS cache-dir resolution (XDG, ~/Library/Caches, %LOCALAPPDATA%)
 ├── transports/
 │   └── fetch.js          # The one core transport
-└── *.d.ts                # Hand-written TypeScript declarations (kept in sync per module)
+└── *.d.ts                # Hand-written declarations — sole source of types/docs; each .js
+                          #   points at its sidecar via // @ts-self-types (no JSDoc in .js)
 tests/                    # Universal tests (tape-six); cli/ = Node/Bun/Deno-only, web/ = browser-only,
                           # server/ = tape6-server wire fixtures (echo/status/delay/etag/jsonl/sse/upload)
 dev-docs/                 # Internal developer documentation (design.md, parity survey)

@@ -89,3 +89,29 @@ test('io.stream.post is the duplex form for POST', async t => {
   t.equal(out, 'got:z', 'POST duplex streams like the PUT form');
   reset();
 });
+
+test('a non-2xx stream cancels the undrained error body', async t => {
+  let cancelled = false;
+  serve(
+    () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('boom'));
+          },
+          cancel() {
+            cancelled = true;
+          }
+        }),
+        {status: 500}
+      )
+  );
+  try {
+    await io.get('https://example.com/se', null, {stream: true});
+    t.fail('a 5xx must throw');
+  } catch (error) {
+    t.ok(error instanceof io.BadStatus, 'BadStatus thrown');
+  }
+  t.ok(cancelled, 'the error body stream was cancelled, not leaked');
+  reset();
+});
