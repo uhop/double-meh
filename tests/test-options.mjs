@@ -35,3 +35,20 @@ test('track wait: registers interest without firing; a real request resolves the
   t.deepEqual(r, {v: 42}, 'the real request resolved too');
   reset();
 });
+
+test('the page option lowers to offset/limit/cursor query params', async t => {
+  let seen;
+  serve(request => {
+    seen = request.url;
+    return json({});
+  });
+  await io.get('https://example.com/paged', null, {page: {offset: 40, limit: 20}});
+  let url = new URL(seen);
+  t.equal(url.searchParams.get('offset'), '40', 'offset lowered');
+  t.equal(url.searchParams.get('limit'), '20', 'limit lowered');
+  await io.get('https://example.com/paged', null, {page: {cursor: 'eyJpZCI6Ijk5In0'}});
+  url = new URL(seen);
+  t.equal(url.searchParams.get('cursor'), 'eyJpZCI6Ijk5In0', 'cursor lowered');
+  t.equal(url.searchParams.get('offset'), null, 'absent page fields contribute nothing');
+  reset();
+});

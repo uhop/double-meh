@@ -54,6 +54,7 @@ export interface Options {
   fields?: string[];
   sort?: string[];
   expand?: string[];
+  page?: {offset?: number; limit?: number; cursor?: string};
   stream?: boolean;
   bust?: boolean | string;
   ignoreBadStatus?: boolean;
@@ -314,6 +315,12 @@ export interface Mock {
 
 export type UpdateFn<T> = (data: T) => T | undefined | Promise<T | undefined>;
 
+export interface GetByIds {
+  <T = unknown>(url: Target, ids: readonly (string | number)[], options?: Overrides): Promise<T>;
+  /** Built GETs longer than this fall back to a POST body. Default: 2000. */
+  urlLimit: number;
+}
+
 export interface IO extends Verbs {
   <T = unknown>(url: Target, data?: unknown, options?: Overrides): Promise<T>;
   full: FullNamespace;
@@ -326,6 +333,8 @@ export interface IO extends Verbs {
   mock: Mock;
   create(): IO;
   update<T = unknown>(target: Target, fn: UpdateFn<T>, options?: Overrides): Promise<T>;
+  paginate<T = unknown>(url: Target, data?: unknown, options?: Overrides): AsyncIterableIterator<T>;
+  getByIds: GetByIds;
   adopt(options: Target, source: Promise<Response> | Response): Promise<Envelope>;
   toEnvelope(response: Response, options: Target): Promise<Envelope>;
   run<T = unknown>(options: Target): Promise<Envelope<T>>;

@@ -13,7 +13,7 @@ src/                      # Source code (plain ESM, no build step; published as-
 ├── io.js                 # Core pipeline + createIO() factory (verbs, run, dispatch, events)
 ├── envelope.js           # Response envelope + error taxonomy (IOError/FailedIO/TimedOut/BadStatus)
 ├── key.js                # URL building, canonicalization, request identity (makeKey)
-├── helpers.js            # io.update() — conditional read-modify-write
+├── helpers.js            # io.update() (conditional RMW), io.paginate() (row iterator), io.getByIds()
 ├── code-forward.js       # __doubleMeh prelude protocol (early network hoisting)
 ├── services/             # Response-level middleware (priority onion) + run-level track
 │   ├── track.js          # In-flight GET dedup (decoded-envelope level) + adopt

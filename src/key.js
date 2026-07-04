@@ -27,6 +27,11 @@ const buildQuery = options => {
   appendList(params, 'fields', options.fields);
   appendList(params, 'sort', options.sort);
   appendList(params, 'expand', options.expand);
+  if (options.page && typeof options.page === 'object') {
+    for (const key of ['offset', 'limit', 'cursor']) {
+      if (options.page[key] != null) params.append(key, String(options.page[key]));
+    }
+  }
   if (options.bust) {
     params.append(options.bust === true ? 'io-bust' : String(options.bust), bustValue());
   }

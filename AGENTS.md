@@ -42,7 +42,7 @@ double-meh/
 │   ├── io.js             # Core pipeline + createIO() factory
 │   ├── envelope.js       # Envelope + errors (IOError/FailedIO/TimedOut/BadStatus)
 │   ├── key.js            # URL building + canonical request identity
-│   ├── helpers.js        # io.update()
+│   ├── helpers.js        # io.update(), io.paginate(), io.getByIds()
 │   ├── code-forward.js   # __doubleMeh prelude protocol
 │   ├── services/         # track, cache, retry, mock
 │   ├── storage/          # cache backends: memory (default), fs, sqlite, cache-api

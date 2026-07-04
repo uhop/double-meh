@@ -212,7 +212,7 @@ io.get('/products', {
   page: {offset: 40, limit: 20} // → ?offset=40&limit=20  (or {cursor})
 });
 
-io.getByIds('/products', ['ap-31', 'ap-77']); // GET ?ids=… , auto POST-body fallback when the URL overflows
+io.getByIds('/products', ['ap-31', 'ap-77']); // GET ?ids=… , auto POST-body fallback when the URL overflows — built 2026-07-03 ({keys} body per the article)
 ```
 
 `makeQuery` learns comma-joined arrays for `fields`/`sort`/`expand`/`ids` (still repeated-key for plain
@@ -228,7 +228,8 @@ multi-value). `url\`\`` tagged template for sanitized interpolation stays.
   a response inspector, not per-call handling.
 - **Pagination iteration** — `for await (const row of io.paginate('/products', {...}))` follows
   `links.next` / the opaque `cursor` and stops on absence. Encodes "page by `items.length`, never by
-  your requested limit."
+  your requested limit." _(built 2026-07-03: body links → cursor → offset arithmetic → header
+  `Link`, per-response; short/empty pages and `total` end offset mode; repeats throw `FailedIO`.)_
 - **Record streaming (decode side) — `io.records`** _(built 2026-07-03)_.
   `io.records.get/post(url, data?, options?)` → a lazy async iterable of **parsed records**; the
   request fires on first iteration. Framing is negotiated from the response content type — JSONL /
