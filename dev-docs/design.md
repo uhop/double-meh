@@ -43,6 +43,9 @@ cursor pagination, `problem+json`, content negotiation).
   script download → parse → execute.
 - **Extensible everywhere.** Pluggable transports, services, request/response inspectors, data &
   MIME processors, compression encoders.
+- **Adornments are no-op-degradable.** Cache / track / bundle / the SW tier are performance
+  transforms, never semantic ones; any of them may vanish mid-session and the app must be
+  logically indistinguishable.
 - **Zero runtime dependencies. ESM. Fleet standards.**
 
 ## Dropped from `heya/io`
@@ -404,6 +407,121 @@ bodies batched into one. Measurement showed the wins came from **(2) + (3)**, no
 (browsers with a higher cap still benefited). HTTP/2 multiplexing nullifies (1) outright and dents (2) —
 which is exactly why the promote-or-not call is benchmark-gated against it.
 
+**Promoted 2026-07-04** — benchmark run (`benchmarks/bundle/`, zero-code: seeded corpus, byte tables,
+real h2 wire bytes via socket counters, nano-bench wall time) plus a live 10-API protocol probe.
+Verdict: latency-parity with h2 (both ~1 RTT); the surviving client win is **compression locality** —
+~40–48% bytes on many-small bursts, ~16–22% medium, ~2–7% large — plus upstream header elimination;
+h2/h3 cannot aggregate **across origins** (multiplexing is per-origin) while one bundler origin fans
+out to any backend service; and h2 is an _edge_ affair in practice (AWS request/response APIs are
+h1.1-only; nginx never implemented h2 to upstreams), so over h1.1 paths the full historical win
+returns. Decision record: `projects/double-meh/decisions` in the vault.
+
+#### Wire format v1
+
+Two custom MIME types replace heya's structural body sniff (`{bundle: 'bundle', results: […]}`) —
+the content type **is** the detector now; `io.bundle.detect` survives only as an opt-in structural
+fallback for foreign endpoints that cannot set one:
+
+- request: `application/vnd.double-meh.bundle-request+json`
+- response: `application/vnd.double-meh.bundle+json`
+
+The `+json` suffix keeps generic tooling working; the vendor tree needs no registration in practice
+(GitHub's `vnd.github+json` precedent). Reserved for a v2: `…bundle+jsonl` — parts streamed as they
+complete server-side, consumed through the records layer.
+
+Request body — an envelope, not a bare array (extensibility):
+
+```json
+{
+  "v": 1,
+  "parts": [
+    {
+      "id": "a",
+      "url": "/api/users/42",
+      "method": "GET",
+      "headers": {"accept": "application/json", "if-none-match": "\"v7\""}
+    }
+  ]
+}
+```
+
+- `id` — client-assigned, unique per bundle; correlation is by id, never by order (enables
+  out-of-order/streamed parts later).
+- `headers` — a whitelist rides per part: `accept`, `accept-language`, conditional headers
+  (`if-none-match`, `if-modified-since`). **Auth/cookies never appear inside parts** — the bundler
+  propagates them from the outer request (heya's cookie rule, extended to `Authorization`).
+- `method` defaults to GET; v1 bundlers may reject anything else.
+
+Response body:
+
+```json
+{
+  "v": 1,
+  "parts": [
+    {
+      "id": "a",
+      "status": 200,
+      "headers": {"content-type": "application/json", "etag": "\"v8\"", "vary": "Accept"},
+      "body": {"…": "inline JSON"}
+    },
+    {"id": "b", "status": 304, "headers": {"etag": "\"v3\""}},
+    {
+      "id": "c",
+      "status": 502,
+      "synthetic": true,
+      "headers": {"content-type": "text/plain"},
+      "body": "upstream timeout"
+    }
+  ]
+}
+```
+
+- Part bodies by content type: JSON types ride **inline** (that's the compression-locality payoff);
+  `text/*` as strings; binary as base64 with `"encoding": "base64"` (discouraged — bundling targets
+  JSON APIs). **Base64/binary parts sort last**: correlation is by id, so order is free — keeping
+  text parts contiguous preserves the shared-window locality (gzip's 32KB window especially; an
+  incompressible span between text parts pushes them out of each other's reach). The same
+  text-first rule applies to any future multipart variant. 304 parts carry no body; the client's
+  revalidation merge applies per part.
+- Part headers carry the full cache-relevant set (`etag`, `vary`, `cache-control`) — they drive the
+  client cache. The **outer** response strips them (heya's blacklist): the envelope itself must never
+  be cached or revalidated as a unit.
+- `synthetic: true` marks bundler-generated failures; the client maps those to `FailedIO` (transport
+  never happened), while a genuine upstream non-2xx part takes the normal `BadStatus` path — the
+  taxonomy split survives bundling.
+
+The send itself is **full-stack recursion**: a regular
+`io.put(bundler.url, doc, {bundle: false, …})` — inspectors (auth), events/`io.inFlight` (per
+_logical_ request), retry (PUT is idempotent, and a bundle of GETs is retry-safe by construction —
+one reason to keep heya's PUT over POST; the `QUERY` method is the eventual semantic fit), mock, and
+`compress:` on the upstream body all apply. Service ordering: cache → track/dedup → bundle →
+transport — only true misses enter a window, identical GETs collapse on the track key.
+
+#### Client API (`io.bundle`)
+
+Standard scaffold (`attach`/`detach`/`theDefault`/`optIn`; per-request option wins). Hard gates:
+GET-only; never `stream`/records/SSE; never `bust`; `track: 'wait'` skips (nothing is firing).
+
+- `bundle: true | false | 'name'` — `true` joins the anonymous default bundle (auto-flush after
+  `waitTime`, default 20 ms); a **string names a bundle**: collected until `io.bundle.flush(name)`,
+  `maxSize` overflow, or the `maxWait` safety timer (forgotten flushes must not hang requests).
+- `io.bundle.flush(id?)` → `Promise<void>` resolving after that bundle's response is unpacked
+  (explicit flush removes the window wait entirely — the synchronous-burst case pays zero delay).
+- Config: `url`, `waitTime` (20), `maxSize` (20 — overflow chunks into several sends), `minSize`
+  (2 — degenerate bundles are sent as plain individual requests), `maxWait` (named-bundle safety),
+  `writeThrough: false | cacheName` (also write unpacked parts into the Cache API so a controlling
+  SW serves them to unadorned `fetch()`).
+- **Multiple bundlers**: `io.bundle.register({url, match, …overrides})` — `match` is the scoped-
+  inspector matcher convention (URL prefix | RegExp | predicate); first match wins; the default
+  bundler is the catch-all. Each bundler keeps its own window and pending pool.
+- Manual bundles: `io.bundle.submit(requests, {id?})` (the `[url1, url2, url3]` form);
+  `io.bundle.fly(descriptors)` registers track interest for parts expected via **any** endpoint's
+  bundle payload (code-forward).
+- Unpacking is a response inspector keyed on the MIME type: each part →
+  `new Response(body, {status, headers})` → `makeKey(url, effective accept)` → resolve the waiting
+  track deferred, else adopt-seed the cache (Vary honored) — from any endpoint, not just the
+  bundler; unclaimed parts are prefetches by definition.
+
 ## Transports
 
 `fetch()` is _the_ core transport and default; `jsonp`/`load` are gone. The pluggable registry stays
@@ -572,6 +690,96 @@ receive it. **Shipped elsewhere:** the **reference SW** itself (separate repo/ex
 routes, and offline policy are app-specific. The main project must work with **no SW**, with a
 `BroadcastChannel` for cross-tab only, or with a full SW — same cache API either way.
 
+**SW-side bundling — the technique without double-meh** _(2026-07-04)_. The reference SW can bundle
+standalone: the fetch handler collects eligible GET `FetchEvent`s in a micro-window (`respondWith`
+takes a promise, so holding a few ms is legal), sends one bundle request (same wire format as
+`io.bundle` — the format spec is deliberately library-independent), and fans parts back to each
+pending `respondWith` as re-minted `Response`s. Nothing productized exists in this space — the open
+w3c/ServiceWorker#340 issue (2014) asks browsers to deliver fetch events in batches and documents the
+wait-a-tick workaround as the state of the art — so the reference SW would be first. Constraints: SW
+cold start adds latency on a cold hit; the first page load is uncontrolled until `clients.claim`;
+streaming/Range/non-GET pass through untouched. **Coordination rule:** when both are present, the SW
+and `io.bundle` must not double-window — handshake over the message contract (`io:hello` advertising
+`bundling`), client-side bundling wins (it has more context: named bundles, explicit flush), and the
+SW passes bundle PUTs through.
+
+**Version upgrade** rides the SW lifecycle (install new asset set → waiting → activate): the contract
+gains `io:version {current, available}` and `io:upgrade` (page-initiated `skipWaiting` +
+`clients.claim` + coordinated reload via `BroadcastChannel`), and the server can push "version X
+available" down the same SSE/records invalidation channel → `registration.update()`. Policy (prompt
+vs auto, precache manifest) is the reference SW's business, per the posture above.
+
+**Landscape** _(2026-07-04)_: Workbox (Chrome Aurora team, 7.4.x) and Serwist (the fork born of
+Workbox's stagnation window; Next/Vite/Nuxt/SvelteKit integrations) promote: precache manifests +
+app-shell versioning, runtime caching strategies (cache-first / network-first / stale-while-
+revalidate), offline fallback, **background sync** (queue failed writes, replay online — synergy:
+`Idempotency-Key` makes replay safe by construction, already in the safety story), broadcast-update
+(tab notification on cached-resource change — merges with `io:invalidate`), cache expiration/quota,
+navigation preload; Angular's `ngsw`/`SwUpdate` is the best packaged version-upgrade UX. **None of
+them bundle requests** — that stays this design's differentiator.
+
+**Division of labor** _(2026-07-04, settled)_: **semantics on the page, amplification in the
+worker.** The pipeline (inspectors, taxonomy, options, promises) is the policy engine and must stay
+universal — the CLI axis has no SW, so any semantic mechanic living only in the SW would fork the
+library into browser/CLI dialects. The SW owns what it alone can do: cross-tab and cross-navigation
+sharing, serving unadorned `fetch()`, offline/background sync, version upgrade. Mechanics both
+could do are negotiated at the handshake ("closest to context wins"): **caching** layers — page
+memory + decoded envelopes are L1, the SW Cache API is the shared persistent tier; **dedup**
+layers — envelope-level decode-once is page-side by physics (the SW shares bytes only; structured
+clone copies, never shares parsed objects), cross-tab wire coalescing is SW-side; **bundling** is
+client-wins (named bundles/flush need per-request context); **retry** is page-only (an SW retry
+under a retrying library multiplies attempts). Wholesale relocation of the adornments into the SW
+was considered and rejected: the CLI keeps the code resident regardless; L1/decode-once cannot
+move; and the SW controls pages only _after_ first visit — SW-only accelerators would deliver zero
+acceleration on the coldest, most latency-critical pageview and full acceleration on warm ones
+that need it least.
+
+**Meta channels — two planes.** Custom headers are the per-request _data plane_: they ride the
+exact request they describe, visible to the SW synchronously in the fetch event — messaging cannot
+correlate per-request metadata without races. Rules: attach only when controlled _and_ the
+handshake confirmed understanding; the SW strips them before anything reaches the wire; namespaced
+`x-io-*`; harmless if leaked (they _will_ leak on a hard reload); same-origin only (a custom header
+on a cross-origin request buys a CORS preflight). Messaging is the _control plane_: the `io:hello`
+capability handshake (versioned — page lib and SW release on independent cadences, and the SW
+additionally lags through the waiting/activate lifecycle), invalidation, version, config. The SW
+annotates _synthesized_ responses freely (`x-io-from: sw-cache` — never on the wire).
+
+**Enrichment, not a transport fork.** `fetch()` _is_ the SW transport when a page is controlled.
+The one exception is the opt-in **`sw` message transport** (page → message → SW-side `fetch()`),
+which owns two things interception structurally cannot: engagement on _uncontrolled_ pages
+(`navigator.serviceWorker.ready` → `registration.active.postMessage()` works before control —
+first visit included) and **navigation-surviving requests** (the SW completes under `waitUntil`
+and lands the result in the Cache API — fire on page A, adopt on page B: code-forward across
+navigations). Costs: signals/progress don't cross (correlated abort messages instead),
+structured-clone limits on bodies, DevTools attribution moves to the SW. It is the transport for
+the prefetch/adopt class; interactive traffic stays on native fetch. The SW core has **two
+intakes** — fetch events and messages — feeding one scheduler.
+
+**Delivery — a sibling project; one codebase, two forms.** The SW side is a browser-only sibling
+(the `heya/io` + `heya/bundler` precedent; the example-server repo is the third leg). It ships as
+(1) a ready-made SW file — batteries included, standalone vs negotiated decided by the handshake
+at runtime, not by artifact — and (2) the same machinery as importable modules (Workbox-style),
+because **one SW per scope** is a platform law: apps with an existing SW compose the modules in.
+Standalone value is the differentiator: bundling, shared cache, and version upgrades for apps that
+never heard of double-meh — custom headers as the low-friction control rung, the public message
+contract as the rich one.
+
+**The four quadrants.** double-meh alone (no SW by design, hard reload, first visit): the complete
+semantic feature set; cross-tab invalidation still works via bare `BroadcastChannel`. double-meh +
+SW (detected: `controller` present _and_ `io:hello` answered): shared cache tier serving unadorned
+fetches, cross-tab in-flight coalescing, the invalidation hub, connection consolidation (one
+SSE/push subscription per origin instead of per tab), navigation-surviving prefetch, offline +
+background-sync replay made safe by `Idempotency-Key`, the version-upgrade flow, response
+annotations. CLI: the first quadrant, identically. SW alone: zero-integration acceleration plus
+header/message opt-in control.
+
+**The invariant that makes it all safe: adornments are no-op-degradable at every layer.** Cache,
+track, bundle, and the whole SW tier are performance transforms, never semantic ones — any of them
+may vanish mid-session (detached service, killed SW, hard reload, first visit, CLI) and the app
+must be logically indistinguishable. The scaffold enforces it per service; the SW is the same rule
+one layer out. Test-strategy corollary: run the suite with services detached and the SW absent —
+any behavioral diff is by definition a bug in an adornment.
+
 ## Streaming & compression (CLI / Node)
 
 - **`io.stream` write verbs** — the Duplex source/sink (`io.stream.put/post/patch` → `{writable,
@@ -586,8 +794,14 @@ readable, response}`), rebuilt on fetch/undici streams (`duplex:'half'`). Pipe a
   gzip/deflate ride the standard `CompressionStream` (universal, browsers included — request-side
   compression doesn't touch `Accept-Encoding`, so the CLI-only restriction relaxed); br/zstd ride
   `node:zlib` via the **opt-in** `encoders/zlib.js` (dynamic `node:` imports stay out of browser
-  bundles — the `storage/sqlite.js` pattern; zstd feature-detected; brotli quality pinned to 5 for
-  on-the-fly use). heya-io-node's decode side and `Accept-Encoding` management are obsolete — fetch
+  bundles — the `storage/sqlite.js` pattern; zstd feature-detected; brotli quality defaults to 5
+  for on-the-fly use). **Parameters are set at registration, never per request** _(2026-07-04)_:
+  `installZlibEncoders(io, {br, zstd, gzip, deflate})` configures the defaults, and the exported
+  factories (`gzipEncoder`/`deflateEncoder`/`brotliEncoder`/`zstdEncoder`, `node:zlib` options
+  verbatim + `quality`/`level` sugar) register named policy variants. Best-effort by construction:
+  the platform `CompressionStream` pair has no knobs (the web standard takes only the format name);
+  passing `gzip`/`deflate` options replaces them with parameterized `node:zlib` versions (CLI
+  only). heya-io-node's decode side and `Accept-Encoding` management are obsolete — fetch
   decompresses natively. Buffered bodies re-buffer (keeps `Content-Length`); stream bodies stay
   streams; `FormData`/`URLSearchParams` throw (the transport owns their encoding).
 
