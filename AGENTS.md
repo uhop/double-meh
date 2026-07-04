@@ -44,8 +44,9 @@ double-meh/
 │   ├── helpers.js        # io.update()
 │   ├── code-forward.js   # __doubleMeh prelude protocol
 │   ├── services/         # track, cache, retry, mock
+│   ├── storage/          # cache backends: memory (default), fs, sqlite, cache-api
 │   └── transports/       # fetch
-├── tests/                # Test files (test-*.mjs, test-*.mts)
+├── tests/                # Test files (test-*.mjs, test-*.mts); server/ holds wire fixtures
 ├── dev-docs/             # Internal developer documentation (design.md)
 ├── wiki/                 # GitHub wiki documentation (git submodule)
 └── .github/              # CI workflows, Dependabot config

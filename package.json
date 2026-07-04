@@ -61,9 +61,9 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.0",
     "prettier": "^3.9.4",
-    "tape-six": "^1.11.0",
+    "tape-six": "^1.13.0",
     "typescript": "^6.0.3",
     "wiki-search-index": "^0.2.0"
   }

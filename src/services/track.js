@@ -59,7 +59,14 @@ export const installTrack = io => {
     Promise.resolve(source)
       .then(async response => {
         if (io.cache && io.cache.isActive && io.cache.optIn(options)) {
-          await io.cache.save(options, response.clone());
+          // Deno's clone() drops synthesized headers: rebuild the copy from the original's metadata
+          const copy = new Response(response.clone().body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers
+          });
+          // decoupled: waiters get the envelope now; io.cache.idle() awaits the backend write
+          io.cache.save(options, copy).catch(() => {});
         }
         entry.resolve(await io.toEnvelope(response, options));
       })

@@ -286,6 +286,7 @@ export interface Cache {
   clear(): Promise<IO>;
   sweep(): Promise<IO>;
   save(target: Target, response: Response, ttl?: number): Promise<IO>;
+  idle(): Promise<void>;
 }
 
 export interface Retry {

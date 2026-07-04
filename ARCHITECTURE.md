@@ -20,6 +20,12 @@ src/                      # Source code (plain ESM, no build step; published as-
 │   ├── cache.js          # App-governed cache (on by default for GETs, TTL, 304 revalidation)
 │   ├── retry.js          # Verb-safety-aware retry (+ polling via continueRetries)
 │   └── mock.js           # Serverless mocking; composes with the real pipeline
+├── storage/              # Swappable cache backends (get/set/delete/clear/keys)
+│   ├── memory.js         # Map-backed default (per instance, no persistence)
+│   ├── fs.js             # One file per entry in the OS cache dir; atomic temp+rename writes
+│   ├── sqlite.js         # Feature-detected node:sqlite / bun:sqlite (not Deno); async factory
+│   ├── cache-api.js      # Browser Cache API; metadata as synthetic x-io-* headers
+│   └── cache-dir.js      # OS cache-dir resolution (XDG, ~/Library/Caches, %LOCALAPPDATA%)
 ├── transports/
 │   └── fetch.js          # The one core transport
 └── *.d.ts                # Hand-written TypeScript declarations (kept in sync per module)
@@ -51,11 +57,15 @@ src/index.js
 │   └── src/envelope.js
 ├── src/transports/fetch.js
 ├── src/services/track.js
-├── src/services/cache.js   → src/key.js
+├── src/services/cache.js   → src/key.js, src/storage/memory.js
 ├── src/services/retry.js   → src/envelope.js
 ├── src/services/mock.js    → src/key.js
 ├── src/helpers.js
 └── src/code-forward.js
+
+src/storage/fs.js           → src/storage/cache-dir.js   (opt-in import)
+src/storage/sqlite.js       → src/storage/cache-dir.js   (opt-in import)
+src/storage/cache-api.js                                 (opt-in import)
 ```
 
 ## Testing
@@ -85,4 +95,9 @@ import {get, full, stream, update, adopt, create, IOError, BadStatus} from 'doub
 import {createIO} from 'double-meh/io.js';
 import {fetchTransport} from 'double-meh/transports/fetch.js';
 import {installCache} from 'double-meh/services/cache.js';
+
+// Persistent cache backends — opt-in, swapped via io.cache.storage
+import {fsStorage} from 'double-meh/storage/fs.js';
+import {sqliteStorage} from 'double-meh/storage/sqlite.js';
+import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 ```

@@ -93,6 +93,7 @@ test('adopt pre-populates the cache: a later bare GET hits without a network cal
   let calls = 0;
   serve(() => json({from: 'network', n: ++calls}));
   await io.adopt('https://example.com/cf', json({from: 'prefetch'}));
+  await io.cache.idle();
   const data = await io.get('https://example.com/cf');
   t.equal(calls, 0, 'served from the cache that adopt populated');
   t.deepEqual(data, {from: 'prefetch'}, 'the adopted body, durable past the in-flight window');

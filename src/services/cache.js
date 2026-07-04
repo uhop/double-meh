@@ -1,15 +1,5 @@
 import {canonicalUrl} from '../key.js';
-
-const memoryStorage = () => {
-  const map = new Map();
-  return {
-    get: key => map.get(key),
-    set: (key, entry) => void map.set(key, entry),
-    delete: key => void map.delete(key),
-    clear: () => void map.clear(),
-    keys: () => [...map.keys()]
-  };
-};
+import {memoryStorage} from '../storage/memory.js';
 
 const toEntry = async (response, ttl) => ({
   status: response.status,
@@ -30,6 +20,16 @@ const toResponse = entry =>
 
 export const installCache = io => {
   const storage = memoryStorage();
+
+  const pending = new Set();
+  const watch = promise => {
+    const settled = promise.then(
+      () => void pending.delete(settled),
+      () => void pending.delete(settled)
+    );
+    pending.add(settled);
+    return promise;
+  };
 
   const ttlFor = options => {
     const c = options.cache;
@@ -129,10 +129,16 @@ export const installCache = io => {
       }
       return io;
     },
-    save: async (target, response, ttl) => {
-      const entry = await toEntry(response, ttl == null ? io.cache.defaultTtl : ttl);
-      await io.cache.storage.set(keyOf(target), entry);
-      return io;
+    save: (target, response, ttl) =>
+      watch(
+        (async () => {
+          const entry = await toEntry(response, ttl == null ? io.cache.defaultTtl : ttl);
+          await io.cache.storage.set(keyOf(target), entry);
+          return io;
+        })()
+      ),
+    idle: async () => {
+      while (pending.size) await Promise.all([...pending]);
     }
   };
 
