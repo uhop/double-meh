@@ -43,6 +43,7 @@ double-meh/
 │   ├── envelope.js       # Envelope + errors (IOError/FailedIO/TimedOut/BadStatus)
 │   ├── key.js            # URL building + canonical request identity
 │   ├── helpers.js        # io.update(), io.paginate(), io.getByIds()
+│   ├── encoders.js       # compress option: gzip/deflate; encoders/ holds opt-in br/zstd (node:zlib)
 │   ├── code-forward.js   # __doubleMeh prelude protocol
 │   ├── services/         # track, cache, retry, mock
 │   ├── storage/          # cache backends: memory (default), fs, sqlite, cache-api

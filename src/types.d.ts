@@ -62,6 +62,8 @@ export interface Options {
   track?: boolean | 'wait';
   mock?: boolean;
   retry?: boolean | number | RetryConfig;
+  /** Compress the request body: an encoder name from `io.encoders`, or `true` for gzip. */
+  compress?: boolean | ('gzip' | 'deflate' | 'br' | 'zstd' | (string & {}));
   idempotencyKey?: boolean | string;
   force?: boolean;
   onDownloadProgress?(info: DownloadProgress): void;
@@ -317,6 +319,13 @@ export interface Mock {
 
 export type UpdateFn<T> = (data: T) => T | undefined | Promise<T | undefined>;
 
+export type CompressionEncoder = (
+  source: ReadableStream<Uint8Array>,
+  options: Options
+) => ReadableStream<Uint8Array> | Promise<ReadableStream<Uint8Array>>;
+
+export type CompressionEncoders = Record<string, CompressionEncoder>;
+
 export interface GetByIds {
   <T = unknown>(url: Target, ids: readonly (string | number)[], options?: Overrides): Promise<T>;
   /** Built GETs longer than this fall back to a POST body. Default: 2000. */
@@ -337,6 +346,7 @@ export interface IO extends Verbs {
   update<T = unknown>(target: Target, fn: UpdateFn<T>, options?: Overrides): Promise<T>;
   paginate<T = unknown>(url: Target, data?: unknown, options?: Overrides): AsyncIterableIterator<T>;
   getByIds: GetByIds;
+  encoders: CompressionEncoders;
   adopt(options: Target, source: Promise<Response> | Response): Promise<Envelope>;
   toEnvelope(response: Response, options: Target): Promise<Envelope>;
   run<T = unknown>(options: Target): Promise<Envelope<T>>;

@@ -577,7 +577,16 @@ readable, response}`), rebuilt on fetch/undici streams (`duplex:'half'`). Pipe a
   One namespace, per-verb shapes — "the method declares the return shape" already licenses that.
 - **Pipeline** — `decompress → reframe (JSONL/json-seq) → parse` inbound; `encode → send` outbound.
 - **Encoders** — pluggable, feature-detected registry: gzip, deflate, br, and **zstd** (where the
-  runtime has it). CLI-only; the browser owns `Accept-Encoding` and we don't infringe.
+  runtime has it). CLI-only; the browser owns `Accept-Encoding` and we don't infringe. _(built
+  2026-07-03 — request side only; build-vs-adopt resolved to the platform:)_ `io.encoders` +
+  `compress: true|name` as an assemble-time request inspector (body signers see final bytes);
+  gzip/deflate ride the standard `CompressionStream` (universal, browsers included — request-side
+  compression doesn't touch `Accept-Encoding`, so the CLI-only restriction relaxed); br/zstd ride
+  `node:zlib` via the **opt-in** `encoders/zlib.js` (dynamic `node:` imports stay out of browser
+  bundles — the `storage/sqlite.js` pattern; zstd feature-detected; brotli quality pinned to 5 for
+  on-the-fly use). heya-io-node's decode side and `Accept-Encoding` management are obsolete — fetch
+  decompresses natively. Buffered bodies re-buffer (keeps `Content-Length`); stream bodies stay
+  streams; `FormData`/`URLSearchParams` throw (the transport owns their encoding).
 
 ## Cancellation & progress
 

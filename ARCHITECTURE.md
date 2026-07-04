@@ -14,6 +14,9 @@ src/                      # Source code (plain ESM, no build step; published as-
 ├── envelope.js           # Response envelope + error taxonomy (IOError/FailedIO/TimedOut/BadStatus)
 ├── key.js                # URL building, canonicalization, request identity (makeKey)
 ├── helpers.js            # io.update() (conditional RMW), io.paginate() (row iterator), io.getByIds()
+├── encoders.js           # io.encoders registry + compress option (gzip/deflate via CompressionStream)
+├── encoders/
+│   └── zlib.js           # Opt-in br/zstd via node:zlib (kept out of browser bundles)
 ├── code-forward.js       # __doubleMeh prelude protocol (early network hoisting)
 ├── services/             # Response-level middleware (priority onion) + run-level track
 │   ├── track.js          # In-flight GET dedup (decoded-envelope level) + adopt
@@ -62,11 +65,13 @@ src/index.js
 ├── src/services/retry.js   → src/envelope.js
 ├── src/services/mock.js    → src/key.js
 ├── src/helpers.js
+├── src/encoders.js
 └── src/code-forward.js
 
 src/storage/fs.js           → src/storage/cache-dir.js   (opt-in import)
 src/storage/sqlite.js       → src/storage/cache-dir.js   (opt-in import)
 src/storage/cache-api.js                                 (opt-in import)
+src/encoders/zlib.js                                     (opt-in import)
 ```
 
 ## Testing
@@ -104,4 +109,7 @@ import {installCache} from 'double-meh/services/cache.js';
 import {fsStorage} from 'double-meh/storage/fs.js';
 import {sqliteStorage} from 'double-meh/storage/sqlite.js';
 import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
+
+// CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
+import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
 ```

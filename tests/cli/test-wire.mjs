@@ -118,3 +118,15 @@ test('wire: the upload sink drains and reports the request body', async t => {
     t.deepEqual(last, report, 'the sink recorded the upload');
   });
 });
+
+test('wire: a compressed upload crosses smaller, header intact', async t => {
+  await withTestServer(OPTIONS, async base => {
+    const io = create();
+    const payload = 'double-meh compresses the wire '.repeat(100);
+    const echoed = await io.post(base + '/--io/echo?scope=w-gzip', payload, {compress: 'gzip'});
+    t.equal(echoed.headers['content-encoding'], 'gzip', 'the header crossed the wire');
+    const report = await io.post(base + '/--io/upload?scope=w-gzip', payload, {compress: 'gzip'});
+    t.ok(report.bytes > 0, 'something arrived');
+    t.ok(report.bytes < payload.length, 'fewer bytes than the raw payload');
+  });
+});
