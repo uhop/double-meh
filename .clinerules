@@ -1,8 +1,8 @@
 # AGENTS.md — double-meh
 
-> <!-- TODO: Replace with actual project description -->
->
-> `double-meh` — HTTP I/O. A lightweight, zero-dependency micro-package.
+> `double-meh` — a modern, fetch-native HTTP I/O library for browsers and CLIs: caching, request
+> dedup, retry, streaming, SSE, and transparent request bundling on one `fetch()` pipeline. Zero
+> runtime dependencies.
 
 For project structure, module dependencies, and the architecture overview see [ARCHITECTURE.md](./ARCHITECTURE.md).
 For detailed usage docs and API references see the [wiki](https://github.com/uhop/double-meh/wiki).
@@ -12,7 +12,7 @@ For detailed usage docs and API references see the [wiki](https://github.com/uho
 This project uses a git submodule for the wiki:
 
 ```bash
-git clone --recursive git@github.com:uhop/double-meh.git
+git clone --recursive https://github.com/uhop/double-meh.git
 cd double-meh
 npm install
 ```

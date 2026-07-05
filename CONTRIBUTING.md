@@ -7,7 +7,7 @@ Thank you for your interest in contributing!
 This project uses a git submodule for the wiki. Clone recursively:
 
 ```bash
-git clone --recursive git@github.com:uhop/double-meh.git
+git clone --recursive https://github.com/uhop/double-meh.git
 cd double-meh
 npm install
 ```

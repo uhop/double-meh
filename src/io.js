@@ -535,3 +535,4 @@ export const createIO = () => {
 const io = createIO();
 
 export default io;
+export {io};

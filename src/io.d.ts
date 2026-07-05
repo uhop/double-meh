@@ -4,3 +4,4 @@ export declare const createIO: () => IO;
 
 declare const io: IO;
 export default io;
+export {io};

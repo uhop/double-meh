@@ -15,6 +15,7 @@ import type {
 
 declare const io: IO;
 export default io;
+export {io};
 
 export declare const createIO: () => IO;
 export declare const create: () => IO;

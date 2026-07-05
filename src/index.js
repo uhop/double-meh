@@ -36,6 +36,7 @@ assemble(io);
 installCodeForward(io);
 
 export default io;
+export {io};
 export {createIO};
 export const create = io.create;
 export const get = io.get;

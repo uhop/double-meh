@@ -1,7 +1,7 @@
-# This workflow will do a clean install of node dependencies, build the source code and run tests across different versions of node
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
-
 name: Node.js CI
+
+permissions:
+  contents: read
 
 on:
   push:
@@ -12,8 +12,6 @@ on:
 jobs:
   tests:
     name: Node.js ${{matrix.node-version}} on ${{matrix.os}}
-    permissions:
-      contents: read
     runs-on: ${{matrix.os}}
 
     strategy:
@@ -23,8 +21,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-        # with:
-        #   submodules: true
       - name: Setup Node.js ${{matrix.node-version}}
         uses: actions/setup-node@v6
         with:
@@ -32,6 +28,6 @@ jobs:
       - name: Install the package and run tests
         run: |
           npm ci
-          npm run build --if-present
           npm test
           npm run ts-check --if-present
+          npm run js-check --if-present
