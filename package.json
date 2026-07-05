@@ -50,8 +50,6 @@
     "zero-dependency"
   ],
   "funding": "https://github.com/sponsors/uhop",
-  "llms": "https://raw.githubusercontent.com/uhop/double-meh/main/llms.txt",
-  "llmsFull": "https://raw.githubusercontent.com/uhop/double-meh/main/llms-full.txt",
   "files": [
     "src",
     "LICENSE",
