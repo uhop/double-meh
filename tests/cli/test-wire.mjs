@@ -130,3 +130,24 @@ test('wire: a compressed upload crosses smaller, header intact', async t => {
     t.ok(report.bytes < payload.length, 'fewer bytes than the raw payload');
   });
 });
+
+test('wire: a bundle round-trips through the reference bundler fixture', async t => {
+  await withTestServer(OPTIONS, async base => {
+    const io = create();
+    io.bundle.url = base + '/--io/bundle?scope=w-bundle';
+    const [etagged, delayed] = await Promise.all([
+      io.get(base + '/--io/etag?scope=w-bundle', null, {bundle: true}),
+      io.get(base + '/--io/delay?scope=w-bundle&ms=1', null, {bundle: true})
+    ]);
+    t.equal(etagged.version, 1, 'etag part decoded');
+    t.deepEqual(delayed, {delayed: 1}, 'delay part decoded');
+    const counters = await io.get(base + '/--io/counters?scope=w-bundle', null, {cache: false});
+    t.equal(counters.bundle, 1, 'one bundle request hit the server');
+    t.equal(counters.etag, 1, 'the etag route served through the bundler');
+    t.equal(counters.delay, 1, 'the delay route served through the bundler');
+    const again = await io.get(base + '/--io/etag?scope=w-bundle');
+    t.equal(again.version, 1, 'the part was cached per URL');
+    const after = await io.get(base + '/--io/counters?scope=w-bundle', null, {cache: false});
+    t.equal(after.etag, 1, 'no extra wire hit for the cached part');
+  });
+});

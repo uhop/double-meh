@@ -117,20 +117,55 @@ export default async function fixtures() {
       return json(record);
     },
 
-    counters: (request, url, state) => json(state.counters)
-  };
+    counters: (request, url, state) => json(state.counters),
 
-  return {
-    name: 'double-meh-fixtures',
-    prefix: '/--io/',
-    async fetch(request) {
-      const url = new URL(request.url);
-      const route = url.pathname.slice('/--io/'.length).replace(/\/+$/, '');
-      const handler = routes[route];
-      if (!handler) return undefined; // pass on
-      const state = scopeOf(request, url);
-      if (route !== 'counters') state.counters[route] = (state.counters[route] || 0) + 1;
-      return handler(request, url, state);
+    // reference bundler: unpacks a v1 bundle request, dispatches parts through the same routes
+    bundle: async request => {
+      const doc = request.body ? await request.json() : null;
+      if (!doc || !Array.isArray(doc.parts)) return json({error: 'wrong payload'}, {status: 400});
+      const parts = [];
+      for (const part of doc.parts) {
+        const sub = new Request(new URL(part.url, request.url), {headers: part.headers || {}});
+        let response;
+        try {
+          response = (await dispatch(sub)) || new Response('not found', {status: 404});
+          // generator-sugar routes (jsonl) stream — by design not bundlable
+          if (!(response instanceof Response)) throw new Error('streaming route is not bundlable');
+        } catch (error) {
+          parts.push({
+            id: part.id,
+            url: part.url,
+            status: 502,
+            synthetic: true,
+            headers: {'content-type': 'text/plain'},
+            body: String((error && error.message) || error)
+          });
+          continue;
+        }
+        const headers = Object.fromEntries(response.headers);
+        const out = {id: part.id, url: part.url, status: response.status, headers};
+        if (response.status !== 204 && response.status !== 304) {
+          out.body = /json/.test(headers['content-type'] || '')
+            ? await response.json()
+            : await response.text();
+        }
+        parts.push(out);
+      }
+      return new Response(JSON.stringify({v: 1, parts}), {
+        headers: {'content-type': 'application/vnd.double-meh.bundle+json'}
+      });
     }
   };
+
+  const dispatch = async request => {
+    const url = new URL(request.url);
+    const route = url.pathname.slice('/--io/'.length).replace(/\/+$/, '');
+    const handler = routes[route];
+    if (!handler) return undefined; // pass on
+    const state = scopeOf(request, url);
+    if (route !== 'counters') state.counters[route] = (state.counters[route] || 0) + 1;
+    return handler(request, url, state);
+  };
+
+  return {name: 'double-meh-fixtures', prefix: '/--io/', fetch: dispatch};
 }

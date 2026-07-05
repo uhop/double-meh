@@ -22,7 +22,8 @@ src/                      # Source code (plain ESM, no build step; published as-
 │   ├── track.js          # In-flight GET dedup (decoded-envelope level) + adopt
 │   ├── cache.js          # App-governed cache (on by default for GETs, TTL, 304 revalidation)
 │   ├── retry.js          # Verb-safety-aware retry (+ polling via continueRetries)
-│   └── mock.js           # Serverless mocking; composes with the real pipeline
+│   ├── mock.js           # Serverless mocking; composes with the real pipeline
+│   └── bundle.js         # Batches GETs into one PUT to a bundler; unbundles by MIME from any endpoint
 ├── storage/              # Swappable cache backends (get/set/delete/clear/keys)
 │   ├── memory.js         # Map-backed default (per instance, no persistence)
 │   ├── fs.js             # One file per entry in the OS cache dir; atomic temp+rename writes
@@ -65,6 +66,7 @@ src/index.js
 ├── src/services/cache.js   → src/key.js, src/storage/memory.js
 ├── src/services/retry.js   → src/envelope.js
 ├── src/services/mock.js    → src/key.js
+├── src/services/bundle.js
 ├── src/helpers.js
 ├── src/encoders.js
 └── src/code-forward.js

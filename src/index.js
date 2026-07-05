@@ -5,6 +5,7 @@ import {installTrack} from './services/track.js';
 import {installCache} from './services/cache.js';
 import {installRetry} from './services/retry.js';
 import {installMock} from './services/mock.js';
+import {installBundle} from './services/bundle.js';
 import {installEncoders} from './encoders.js';
 import {installHelpers} from './helpers.js';
 import {installRecords} from './records.js';
@@ -21,6 +22,8 @@ const assemble = instance => {
   installRetry(instance);
   instance.retry.attach();
   installMock(instance);
+  installBundle(instance);
+  instance.bundle.attach(); // inert until io.bundle.url / a registered bundler + opt-in
   installEncoders(instance);
   installHelpers(instance);
   installRecords(instance);
@@ -49,6 +52,7 @@ export const track = io.track;
 export const cache = io.cache;
 export const retry = io.retry;
 export const mock = io.mock;
+export const bundle = io.bundle;
 export const update = io.update;
 export const paginate = io.paginate;
 export const getByIds = io.getByIds;

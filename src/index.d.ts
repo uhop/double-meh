@@ -9,7 +9,8 @@ import type {
   Track,
   Cache,
   Retry,
-  Mock
+  Mock,
+  Bundle
 } from './types.js';
 
 declare const io: IO;
@@ -33,6 +34,7 @@ export declare const track: Track;
 export declare const cache: Cache;
 export declare const retry: Retry;
 export declare const mock: Mock;
+export declare const bundle: Bundle;
 export declare const update: IO['update'];
 export declare const adopt: IO['adopt'];
 export {installCodeForward} from './code-forward.js';
@@ -51,6 +53,8 @@ export type {
   MimeProcessor,
   Service,
   RetryConfig,
+  Bundle,
+  BundlerConfig,
   DecodeMode,
   DownloadProgress,
   StreamDuplex,

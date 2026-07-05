@@ -460,13 +460,15 @@ Response body:
   "parts": [
     {
       "id": "a",
+      "url": "/api/users/42",
       "status": 200,
       "headers": {"content-type": "application/json", "etag": "\"v8\"", "vary": "Accept"},
       "body": {"…": "inline JSON"}
     },
-    {"id": "b", "status": 304, "headers": {"etag": "\"v3\""}},
+    {"id": "b", "url": "/api/users/42/roles", "status": 304, "headers": {"etag": "\"v3\""}},
     {
       "id": "c",
+      "url": "/api/broken",
       "status": 502,
       "synthetic": true,
       "headers": {"content-type": "text/plain"},
@@ -476,6 +478,10 @@ Response body:
 }
 ```
 
+- **Parts echo their request `url`** (plus an optional `accept` for non-default representations):
+  ids correlate waiters, but _unclaimed_ parts — server-added prefetches, payloads from foreign
+  endpoints — need the request identity to adopt-seed the cache and to key the Cache API
+  write-through. A part without a waiter and without a `url` is dropped.
 - Part bodies by content type: JSON types ride **inline** (that's the compression-locality payoff);
   `text/*` as strings; binary as base64 with `"encoding": "base64"` (discouraged — bundling targets
   JSON APIs). **Base64/binary parts sort last**: correlation is by id, so order is free — keeping
@@ -496,6 +502,15 @@ _logical_ request), retry (PUT is idempotent, and a bundle of GETs is retry-safe
 one reason to keep heya's PUT over POST; the `QUERY` method is the eventual semantic fit), mock, and
 `compress:` on the upstream body all apply. Service ordering: cache → track/dedup → bundle →
 transport — only true misses enter a window, identical GETs collapse on the track key.
+
+**Built 2026-07-04** — `src/services/bundle.js` (service priority 25: inside cache and retry, so
+parts store/revalidate through the cache service and can retry through later windows; outside mock,
+so the test harness's catch-all can play the bundler). The unpack is a response inspector keyed on
+the MIME type, so bundle payloads from _any_ endpoint resolve waiters by id or adopt-seed unclaimed
+parts; `writeThrough` lands parts in the Cache API. The reference bundler rides
+`tests/server/fixtures.js` as the `bundle` route (the tape6-plugin shape — the wire suite exercises
+the real thing); the production bundler package (`double-meh-bundler`) and the SW sibling remain
+separate deliverables.
 
 #### Client API (`io.bundle`)
 

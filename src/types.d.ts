@@ -64,6 +64,8 @@ export interface Options {
   retry?: boolean | number | RetryConfig;
   /** Compress the request body: an encoder name from `io.encoders`, or `true` for gzip. */
   compress?: boolean | ('gzip' | 'deflate' | 'br' | 'zstd' | (string & {}));
+  /** Join a bundle: `true` = the default window; a string names a bundle for `io.bundle.flush(name)`. */
+  bundle?: boolean | string;
   idempotencyKey?: boolean | string;
   force?: boolean;
   onDownloadProgress?(info: DownloadProgress): void;
@@ -317,6 +319,39 @@ export interface Mock {
   clear(): IO;
 }
 
+export interface BundlerConfig {
+  url: string;
+  match?: string | RegExp | ((url: string) => boolean);
+  waitTime?: number;
+  maxSize?: number;
+  minSize?: number;
+  maxWait?: number;
+}
+
+export interface Bundle {
+  /** The default bundler endpoint; bundling is inert until set (or a bundler is registered). */
+  url: string;
+  /** Auto-flush window of the default (anonymous) bundle, ms. */
+  waitTime: number;
+  /** A pool reaching this many parts flushes immediately; larger flushes send in chunks. */
+  maxSize: number;
+  /** A flush below this size sends its requests individually instead of a bundle. */
+  minSize: number;
+  /** Safety auto-flush for named bundles whose explicit flush never comes, ms. */
+  maxWait: number;
+  /** Also write unpacked parts into the Cache API: a cache name, or `true` for "io-bundle". */
+  writeThrough: boolean | string;
+  theDefault: ServiceDefault;
+  isActive: boolean;
+  optIn(options: Options): boolean;
+  attach(): IO;
+  detach(): IO;
+  register(config: BundlerConfig): IO;
+  flush(name?: string): Promise<void>;
+  submit(requests: ReadonlyArray<string | Options>, opts?: {id?: string}): Promise<unknown>[];
+  fly(targets: ReadonlyArray<string | Target>): Promise<Envelope>[];
+}
+
 export type UpdateFn<T> = (data: T) => T | undefined | Promise<T | undefined>;
 
 export type CompressionEncoder = (
@@ -342,6 +377,7 @@ export interface IO extends Verbs {
   cache: Cache;
   retry: Retry;
   mock: Mock;
+  bundle: Bundle;
   create(): IO;
   update<T = unknown>(target: Target, fn: UpdateFn<T>, options?: Overrides): Promise<T>;
   paginate<T = unknown>(url: Target, data?: unknown, options?: Overrides): AsyncIterableIterator<T>;
