@@ -18,8 +18,10 @@ const buildQuery = options => {
     for (const [key, value] of dict) params.append(key, value);
   } else if (dict != null && typeof dict === 'object') {
     for (const [key, value] of Object.entries(dict)) {
-      if (Array.isArray(value)) for (const item of value) params.append(key, String(item));
-      else if (value != null) params.append(key, String(value));
+      // arrays comma-join like fields/sort/expand; repeated params ride a URLSearchParams instead
+      if (Array.isArray(value)) {
+        if (value.length) params.append(key, value.join(','));
+      } else if (value != null) params.append(key, String(value));
     }
   } else if (dict != null) {
     // scalar → raw query segment (URLSearchParams can't emit a keyless value); '' contributes nothing

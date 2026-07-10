@@ -38,7 +38,7 @@ src/                      # Source code (plain ESM, no build step; published as-
                           #   points at its sidecar via // @ts-self-types (no JSDoc in .js)
 tests/                    # Universal tests (tape-six); cli/ = Node/Bun/Deno-only, web/ = browser-only,
                           # server/ = tape6-server wire fixtures (echo/status/delay/etag/jsonl/sse/upload)
-dev-docs/                 # Internal developer documentation (design.md, parity survey)
+dev-docs/                 # Internal developer documentation (design.md)
 wiki/                     # GitHub wiki documentation (git submodule)
 .github/                  # CI workflows, Dependabot config
 ```

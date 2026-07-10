@@ -40,6 +40,18 @@ const person = await io.get('https://api.example.com/people/42'); // parsed data
 const {data, etag} = await io.full.get('https://api.example.com/people/42');
 ```
 
+Everyday writes are just as terse — objects go out as JSON:
+
+```js
+const created = await io.post('https://api.example.com/people', {name: 'Ann'});
+
+await io.put('https://api.example.com/people/42', {...person, email});
+
+await io.patch('https://api.example.com/people/42', {email}); // JSON merge-patch et al. via `as`
+
+await io.del('https://api.example.com/people/42'); // io.delete / io.remove — same verb
+```
+
 Safe writes — the library lowers intent to the correct headers and refuses unsafe retries:
 
 ```js
@@ -107,8 +119,8 @@ per-module reference, with
 [ranked search](https://uhop.github.io/wiki-search/app/?wiki=uhop/double-meh).
 
 Migrating from `heya/io` / `heya/io-node`? `double-meh` is their fetch-native successor — the
-feature parity map is in the repo at
-[`dev-docs/heya-io-parity.md`](https://github.com/uhop/double-meh/blob/main/dev-docs/heya-io-parity.md).
+feature parity map is in the wiki:
+[Heya-io parity](https://github.com/uhop/double-meh/wiki/Heya-io-parity).
 
 ## Release history
 

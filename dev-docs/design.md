@@ -80,6 +80,16 @@ one bag: `io.get({url, stream: true})`. So behavior flags never collide with the
 server's call, not ours.) Args are combined with a small `deepMerge` (endpoint ← overrides), so nested
 `headers`/`query` merge per-key while `url` is pinned to the 1st arg.
 
+**The query object bag** _(settled 2026-07-09)_: a shallow object — property names become
+query-parameter names; values stringify (numbers, strings, booleans, objects with a custom
+`toString()`); **arrays comma-join into a single parameter**, the same convention as
+`fields`/`sort`/`expand` and `getByIds` (changed from per-item repeats to match the written
+definition); `null`/`undefined` values and empty arrays drop; nested objects are not serialized (no
+`a[b]=c` convention); a `URLSearchParams` rides verbatim — the repeated-params escape hatch.
+**Query plus body on writes** _(settled 2026-07-09)_: `options.query` carries the query on any
+verb — heya/io's template-tag trick (``io.post(url`…?dept=${id}`, data)``) is deliberately not
+replicated; the option lowers like every other intent.
+
 **One shared instance by default; isolation on demand.** The default export is one configured
 instance — apps configure it once (inspectors, defaults) and every module shares it. For genuine
 isolation (a CLI/server process hosting several independent consumers), `io.create()` returns a

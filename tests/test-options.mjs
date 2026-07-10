@@ -52,3 +52,61 @@ test('the page option lowers to offset/limit/cursor query params', async t => {
   t.equal(url.searchParams.get('offset'), null, 'absent page fields contribute nothing');
   reset();
 });
+
+test('the query object bag: values stringify, arrays comma-join, empties drop', async t => {
+  let seen;
+  serve(request => {
+    seen = request.url;
+    return json({});
+  });
+  const price = {toString: () => '9.99'};
+  await io.get('https://example.com/bag', {
+    q: 'meh',
+    page: 2,
+    active: true,
+    price,
+    tags: ['new', 'sale', 7],
+    empty: [],
+    missing: undefined,
+    none: null
+  });
+  const url = new URL(seen);
+  t.equal(url.searchParams.get('q'), 'meh', 'strings pass');
+  t.equal(url.searchParams.get('page'), '2', 'numbers stringify');
+  t.equal(url.searchParams.get('active'), 'true', 'booleans stringify');
+  t.equal(url.searchParams.get('price'), '9.99', 'custom toString() honored');
+  t.equal(url.searchParams.get('tags'), 'new,sale,7', 'arrays comma-join into one param');
+  t.equal(url.searchParams.getAll('tags').length, 1, 'a single param, not repeats');
+  t.notOk(url.searchParams.has('empty'), 'an empty array contributes nothing');
+  t.notOk(url.searchParams.has('missing'), 'undefined drops');
+  t.notOk(url.searchParams.has('none'), 'null drops');
+  reset();
+});
+
+test('a URLSearchParams query rides verbatim — the repeated-params escape hatch', async t => {
+  let seen;
+  serve(request => {
+    seen = request.url;
+    return json({});
+  });
+  const params = new URLSearchParams();
+  params.append('tag', 'new');
+  params.append('tag', 'sale');
+  await io.get('https://example.com/usp', params);
+  const url = new URL(seen);
+  t.deepEqual(url.searchParams.getAll('tag'), ['new', 'sale'], 'repeats preserved');
+  reset();
+});
+
+test('options.query carries the query when the positional data is a body', async t => {
+  let seen;
+  serve(request => {
+    seen = request;
+    return json({});
+  });
+  await io.post('https://example.com/units', {name: 'unit-1'}, {query: {dept: 42}});
+  const url = new URL(seen.url);
+  t.equal(url.searchParams.get('dept'), '42', 'query rides the URL');
+  t.deepEqual(JSON.parse(seen.body), {name: 'unit-1'}, 'the body is untouched');
+  reset();
+});
