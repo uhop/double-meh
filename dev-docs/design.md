@@ -228,7 +228,14 @@ multi-value). `url\`\`` tagged template for sanitized interpolation stays.
   `URLSearchParams`, `ArrayBuffer`, typed arrays, `ReadableStream`) pass through; `Form` and friends
   encode with the right MIME.
 - **`problem+json` normalization** — RFC 9457 → the error's `data`. Centralized error display becomes
-  a response inspector, not per-call handling.
+  a response inspector, not per-call handling. _(built 2026-07-09, generalized:)_ **`BadStatus.problem`**
+  is the parsed error envelope for _any_ service, best-effort and lazily memoized: `data` itself when
+  the body decoded structured (JSON types incl. `problem+json`, or a MIME processor's output), else a
+  JSON sniff of string bodies (legacy services mislabel their envelopes as `text/plain`/`text/html`),
+  `undefined` when nothing parseable arrived; opaque bodies (Blob/buffer/stream/FormData) never
+  qualify. No schema imposed — RFC 9457 stays the blessed convention, not a contract. XML and other
+  legacy envelope types plug in via `registerMime` (content-type-driven decode already runs on error
+  bodies; that registry is the pluggable-envelope seam).
 - **Pagination iteration** — `for await (const row of io.paginate('/products', {...}))` follows
   `links.next` / the opaque `cursor` and stops on absence. Encodes "page by `items.length`, never by
   your requested limit." _(built 2026-07-03: body links → cursor → offset arithmetic → header

@@ -132,9 +132,37 @@ export class TimedOut extends FailedIO {
   }
 }
 
+const opaqueBody = value =>
+  (typeof Blob !== 'undefined' && value instanceof Blob) ||
+  (typeof ArrayBuffer !== 'undefined' &&
+    (value instanceof ArrayBuffer || ArrayBuffer.isView(value))) ||
+  (typeof ReadableStream !== 'undefined' && value instanceof ReadableStream) ||
+  (typeof FormData !== 'undefined' && value instanceof FormData);
+
+const parseProblem = data => {
+  if (data == null) return undefined;
+  if (typeof data === 'object') return opaqueBody(data) ? undefined : data;
+  if (typeof data === 'string') {
+    const text = data.trim();
+    // legacy services mislabel JSON envelopes (text/plain, text/html): sniff, don't trust the type
+    if (text[0] === '{' || text[0] === '[') {
+      try {
+        return JSON.parse(text);
+      } catch {}
+    }
+  }
+  return undefined;
+};
+
 export class BadStatus extends IOError {
   constructor(response, data, baseUrl, options, errorOptions) {
     super('Bad status: ' + response.status, options, errorOptions);
     defineEnvelope(this, response, data, baseUrl);
+  }
+
+  get problem() {
+    const value = parseProblem(/** @type {any} */ (this).data);
+    Object.defineProperty(this, 'problem', {value, configurable: true});
+    return value;
   }
 }
