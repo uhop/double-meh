@@ -151,7 +151,12 @@ export interface DataProcessor {
 
 export interface MimeProcessor {
   match(contentType: string, response: Response): boolean;
-  decode(response: Response): unknown | Promise<unknown>;
+  /**
+   * Runs on success and error bodies alike (an error's output feeds `BadStatus.problem`). An
+   * envelope-level fault inside a 2xx may throw `BadStatus(response, fault, undefined, options)`
+   * directly — IOErrors pass through the error mapping unwrapped.
+   */
+  decode(response: Response, options: Options): unknown | Promise<unknown>;
 }
 
 export interface Service {

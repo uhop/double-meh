@@ -341,7 +341,7 @@ export const createIO = () => {
     }
     const contentType = response.headers.get('content-type') || '';
     for (const processor of io.mimeProcessors) {
-      if (processor.match(contentType, response)) return processor.decode(source);
+      if (processor.match(contentType, response)) return processor.decode(source, options);
     }
     if (jsonRe.test(contentType)) return parseJson(source);
     return source.text();
