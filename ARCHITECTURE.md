@@ -18,7 +18,8 @@ src/                      # Source code (plain ESM, no build step; published as-
 ├── encoders/
 │   └── zlib.js           # Opt-in br/zstd via node:zlib (kept out of browser bundles)
 ├── code-forward.js       # __doubleMeh prelude protocol (early network hoisting)
-├── sw.js                 # Opt-in page half of the SW contract: io:hello handshake + the 'sw' message transport
+├── sw.js                 # Opt-in page half of the SW contract: io:hello handshake, the 'sw' message
+│                         #   transport, and the cross-tab invalidation channel (BroadcastChannel 'io')
 ├── services/             # Response-level middleware (priority onion) + run-level track
 │   ├── track.js          # In-flight GET dedup (decoded-envelope level) + adopt
 │   ├── cache.js          # App-governed cache (on by default for GETs, TTL, 304 revalidation)
@@ -119,5 +120,5 @@ import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
 
 // Service-Worker integration (page half) — opt-in, pairs with the double-meh-sw sibling
-import {installSW} from 'double-meh/sw.js';
+import {installSW, installChannel} from 'double-meh/sw.js';
 ```

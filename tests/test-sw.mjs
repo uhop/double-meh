@@ -1,72 +1,10 @@
 import test from 'tape-six';
 
 import {io} from './helper.mjs';
+import {makeWorker, makeContainer, tick} from './helper-sw.mjs';
 import {installSW} from '../src/sw.js';
 
 const BASE = 'https://example.com';
-
-const encode = data => new TextEncoder().encode(JSON.stringify(data)).buffer;
-
-// a contract-faithful fake worker: replies on the transferred port like the SW message hub
-const makeWorker = (options = {}) => {
-  const {
-    version = 'sw-test',
-    capabilities = ['cache', 'bundle', 'transport'],
-    routes = {}
-  } = options;
-  const seen = [];
-  return {
-    seen,
-    postMessage(message, transfer) {
-      seen.push(message);
-      const port = transfer && transfer[0];
-      if (!port) return;
-      switch (message.type) {
-        case 'io:hello':
-          port.postMessage({type: 'io:hello', v: 1, version, capabilities});
-          break;
-        case 'io:fetch': {
-          const route = routes[message.url];
-          const reply = typeof route === 'function' ? route(message) : route;
-          if (!reply || reply.error != null) {
-            port.postMessage({
-              type: 'io:result',
-              id: message.id,
-              error: reply ? reply.error : 'no route'
-            });
-            break;
-          }
-          const body = reply.body === undefined ? new ArrayBuffer(0) : encode(reply.body);
-          port.postMessage(
-            {
-              type: 'io:result',
-              id: message.id,
-              status: reply.status || 200,
-              statusText: reply.statusText || 'OK',
-              headers: reply.headers || [['content-type', 'application/json']],
-              body
-            },
-            [body]
-          );
-          break;
-        }
-      }
-    }
-  };
-};
-
-const makeContainer = worker => {
-  const listeners = {};
-  return {
-    controller: worker,
-    ready: Promise.resolve({active: worker}),
-    getRegistration: () => Promise.resolve({active: worker}),
-    addEventListener: (type, fn) => void (listeners[type] ||= []).push(fn),
-    listeners
-  };
-};
-
-const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 test('sw: install shape and the hello handshake', async t => {
   const dm = io.create();

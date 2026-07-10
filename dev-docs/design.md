@@ -782,6 +782,19 @@ disconnect. `writeThrough: true` lands parts in `io-shared` — lockstep with th
 cache-tier default. The `serviceWorker` container is injectable, so the fake-driven suite runs on
 all runtimes and real Chromium.
 
+**Built 2026-07-09 (invalidation channel)** — `src/sw.js` `installChannel(io)`: the cross-tab /
+SW invalidation loop on `BroadcastChannel('io')` (lockstep with the hub). Outbound,
+`io.cache.remove` with a **string** pattern (exact URL or trailing-`*` prefix — canonicalized to a
+URL-prefix wire pattern) posts `io:invalidate` to a controlling SW; a **connected** SW is the
+fan-out hub (it evicts the shared tier and broadcasts `io:invalidated` to every tab), otherwise
+the page broadcasts `io:invalidated` itself — the no-SW quadrant's cross-tab eviction. Inbound
+`io:invalidated` evicts through the _unwrapped_ remove with a URL-space predicate over keys
+(covers accept variants; no re-broadcast, so no loops). Key-space `RegExp`/predicate removals and
+`clear()` stay deliberately local — they don't translate to URL space. `io.channel`
+({name, active, close()}) tears down cleanly; the channel is `unref`ed on Node so CLI processes
+never hang. Exact-URL wire patterns are prefixes on the receiving side — potential over-eviction
+is a cache miss, not an error (the no-op-degradable rule again).
+
 **Delivery — a sibling project; one codebase, two forms.** The SW side is a browser-only sibling
 (the `heya/io` + `heya/bundler` precedent; the example-server repo is the third leg). It ships as
 (1) a ready-made SW file — batteries included, standalone vs negotiated decided by the handshake

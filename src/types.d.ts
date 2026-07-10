@@ -369,6 +369,15 @@ export interface SW {
   hello(): Promise<SW | null>;
 }
 
+export interface Channel {
+  /** The BroadcastChannel name. */
+  name: string;
+  /** False when BroadcastChannel is unsupported, or after `close()`. */
+  active: boolean;
+  /** Detaches: restores `io.cache.remove`, stops listening, closes the channel. */
+  close(): void;
+}
+
 export type UpdateFn<T> = (data: T) => T | undefined | Promise<T | undefined>;
 
 export type CompressionEncoder = (
@@ -397,6 +406,8 @@ export interface IO extends Verbs {
   bundle: Bundle;
   /** Present after `installSW(io)` (the opt-in `double-meh/sw.js` module). */
   sw?: SW;
+  /** Present after `installChannel(io)` (the opt-in `double-meh/sw.js` module). */
+  channel?: Channel;
   create(): IO;
   update<T = unknown>(target: Target, fn: UpdateFn<T>, options?: Overrides): Promise<T>;
   paginate<T = unknown>(url: Target, data?: unknown, options?: Overrides): AsyncIterableIterator<T>;

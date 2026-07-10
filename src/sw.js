@@ -1,12 +1,18 @@
 // @ts-self-types="./sw.d.ts"
 // page half of the SW message contract v1 — lockstep with double-meh-sw src/{contract,messages}.js
 
+import {canonicalUrl} from './key.js';
+
 const HELLO = 'io:hello';
 const FETCH = 'io:fetch';
 const RESULT = 'io:result';
+const INVALIDATE = 'io:invalidate';
+const INVALIDATED = 'io:invalidated';
 
 // lockstep: double-meh-sw cache-tier default; bundle's writeThrough === true lands here
 export const SHARED_CACHE = 'io-shared';
+// lockstep: double-meh-sw broadcasts io:invalidated on this channel
+export const CHANNEL = 'io';
 
 const nullBodyStatus = {204: true, 205: true, 304: true};
 
@@ -135,6 +141,76 @@ export const installSW = (io, options = {}) => {
       });
     }
   }
+
+  return io;
+};
+
+// keys are 'METHOD <canonical url>[ accept=…]'; canonical URLs carry no raw spaces
+const urlOfKey = key => key.slice(key.indexOf(' ') + 1).split(' accept=')[0];
+
+export const installChannel = (io, options = {}) => {
+  const {
+    name = CHANNEL,
+    serviceWorker = globalThis.navigator && globalThis.navigator.serviceWorker
+  } = /** @type {import('./sw.d.ts').ChannelInstallOptions} */ (options);
+
+  const channel = /** @type {(BroadcastChannel & {unref?: () => void}) | null} */ (
+    typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(name) : null
+  );
+  // CLI: an idle channel must not hold the event loop open
+  if (channel && typeof channel.unref === 'function') channel.unref();
+
+  const original = io.cache && io.cache.remove;
+
+  // key-space RegExp/predicates cannot cross into URL space: string forms only
+  const wirePattern = pattern =>
+    typeof pattern === 'string'
+      ? canonicalUrl(pattern.endsWith('*') ? pattern.slice(0, -1) : pattern)
+      : undefined;
+
+  const propagate = pattern => {
+    const wire = wirePattern(pattern);
+    if (wire === undefined) return;
+    const controller = /** @type {import('./sw.d.ts').SWEndpoint | null} */ (
+      (serviceWorker && serviceWorker.controller) || null
+    );
+    if (controller) controller.postMessage({type: INVALIDATE, pattern: wire});
+    // a connected SW is the fan-out hub; otherwise reach the other tabs directly
+    if (channel && !(controller && io.sw && io.sw.connected)) {
+      channel.postMessage({type: INVALIDATED, pattern: wire});
+    }
+  };
+
+  if (original) {
+    io.cache.remove = pattern => {
+      propagate(pattern);
+      return original(pattern);
+    };
+  }
+
+  const onMessage = event => {
+    const data = event.data;
+    if (!data || data.type !== INVALIDATED || data.pattern == null || !original) return;
+    const pattern = data.pattern;
+    const test =
+      pattern instanceof RegExp ? url => pattern.test(url) : url => url.startsWith(String(pattern));
+    // the unwrapped remove: an incoming eviction must not re-broadcast
+    original(key => test(urlOfKey(key))).catch(() => {});
+  };
+  if (channel) channel.addEventListener('message', onMessage);
+
+  io.channel = {
+    name,
+    active: !!channel,
+    close: () => {
+      if (channel) {
+        channel.removeEventListener('message', onMessage);
+        channel.close();
+      }
+      if (original) io.cache.remove = original;
+      io.channel.active = false;
+    }
+  };
 
   return io;
 };

@@ -1,4 +1,4 @@
-import type {IO, SW} from './types.js';
+import type {IO} from './types.js';
 
 /** The message-carrying end of a Service Worker (structural: `ServiceWorker` or a test fake). */
 export interface SWEndpoint {
@@ -28,6 +28,26 @@ export interface SWInstallOptions {
 
 /** The shared-tier cache name — lockstep with the double-meh-sw cache-tier default. */
 export declare const SHARED_CACHE: 'io-shared';
+
+/** The invalidation BroadcastChannel name — lockstep with the double-meh-sw message hub. */
+export declare const CHANNEL: 'io';
+
+export interface ChannelInstallOptions {
+  /** The BroadcastChannel name. Default: `'io'` (the contract channel). */
+  name?: string;
+  /** Injectable for tests. Default: `navigator.serviceWorker`; pass `null` to force "no SW". */
+  serviceWorker?: SWContainerLike | null;
+}
+
+/**
+ * Installs the cross-tab / SW invalidation channel: `io.cache.remove` with a string pattern
+ * (exact URL or trailing-`*` prefix) propagates as a URL-prefix invalidation — `io:invalidate`
+ * to a controlling SW (which evicts its shared tier and fans out `io:invalidated`), or a direct
+ * `io:invalidated` broadcast when no connected SW can relay. Incoming `io:invalidated` messages
+ * evict the local cache without re-broadcasting. Key-space `RegExp`/predicate removals stay
+ * local; `io.cache.clear()` is local by design. Maintains `io.channel` ({name, active, close}).
+ */
+export declare function installChannel(io: IO, options?: ChannelInstallOptions): IO;
 
 /**
  * Installs the page half of the Service-Worker contract: registers the `sw` message transport
