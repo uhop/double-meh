@@ -119,13 +119,30 @@ const abortError = signal =>
 
 export const createIO = () => {
   const io = /** @type {any} */ (
-    (url, data, opts) => run(buildOptions(url, data, opts)).then(envelope => envelope.data)
+    (url, data, opts) => run(assemble(url, data, opts)).then(envelope => envelope.data)
   );
+
+  const applyDefaults = options => {
+    if (!io.optionDefaults.length) return options;
+    const url = options.url == null ? '' : String(options.url);
+    let bag = null;
+    for (const entry of io.optionDefaults) {
+      if (urlMatches(entry.match, url)) bag = bag ? deepMerge(bag, entry.bag) : entry.bag;
+    }
+    if (!bag) return options;
+    const merged = deepMerge(bag, options);
+    merged.url = options.url;
+    return merged;
+  };
+
+  const assemble = (url, data, opts, method) =>
+    applyDefaults(buildOptions(url, data, opts, method));
 
   io.transports = {};
   io.defaultTransport = null;
   io.requestInspectors = [];
   io.responseInspectors = [];
+  io.optionDefaults = [];
   io.dataProcessors = [];
   io.mimeProcessors = [];
   io.services = [];
@@ -151,7 +168,22 @@ export const createIO = () => {
     return io;
   };
 
-  io.full = (url, data, opts) => run(buildOptions(url, data, opts));
+  io.full = (url, data, opts) => run(assemble(url, data, opts));
+
+  io.defaults = (match, bag) => {
+    if (bag === undefined) {
+      bag = /** @type {any} */ (match);
+      match = undefined;
+    }
+    if (bag && typeof bag === 'object') {
+      if ('url' in bag) {
+        bag = {...bag};
+        delete bag.url;
+      }
+      io.optionDefaults.push({match, bag});
+    }
+    return io;
+  };
 
   io.registerTransport = (name, transport) => {
     io.transports[name] = transport;
@@ -511,7 +543,7 @@ export const createIO = () => {
     return execute(request, ctx);
   };
 
-  const invoke = (method, url, data, opts) => run(buildOptions(url, data, opts, method));
+  const invoke = (method, url, data, opts) => run(assemble(url, data, opts, method));
 
   const makeVerb = method => (url, data, opts) => {
     const promise = invoke(method, url, data, opts);
@@ -550,7 +582,7 @@ export const createIO = () => {
   };
   for (const name of streamVerbNames) {
     io.stream[name.toLowerCase()] = (url, opts) =>
-      streamDuplex(buildOptions(url, undefined, opts, name));
+      streamDuplex(assemble(url, undefined, opts, name));
   }
 
   io.run = run;

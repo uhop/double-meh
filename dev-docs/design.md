@@ -80,15 +80,32 @@ one bag: `io.get({url, stream: true})`. So behavior flags never collide with the
 server's call, not ours.) Args are combined with a small `deepMerge` (endpoint ← overrides), so nested
 `headers`/`query` merge per-key while `url` is pinned to the 1st arg.
 
-**The query object bag** _(settled 2026-07-09)_: a shallow object — property names become
-query-parameter names; values stringify (numbers, strings, booleans, objects with a custom
-`toString()`); **arrays comma-join into a single parameter**, the same convention as
-`fields`/`sort`/`expand` and `getByIds` (changed from per-item repeats to match the written
-definition); `null`/`undefined` values and empty arrays drop; nested objects are not serialized (no
-`a[b]=c` convention); a `URLSearchParams` rides verbatim — the repeated-params escape hatch.
+**The query object bag** _(settled 2026-07-09, amended same day)_: a shallow object — property
+names become query-parameter names; values stringify (numbers, strings, booleans, objects with a
+custom `toString()`); `null`/`undefined` values and empty arrays drop; nested objects are not
+serialized (no `a[b]=c` convention); a `URLSearchParams` rides verbatim. **Arrays serialize per
+`listSeparator`** — default unset/`null` = **repeated keys** (`?tags=a&tags=b`): no
+separator-in-item ambiguity out of the box, since `URLSearchParams` form-encoding percent-encodes
+every conventional separator anyway (only `.-_*` survive literally), so joined lists ship with
+`%2C` and buy no wire brevity; a string (`','`, `'|'`, …) joins each list into one parameter for
+APIs that want it. `fields`/`sort`/`expand` keep their own protocol default of `','` (the article
+convention; field names carry no separators) — an explicit `listSeparator` governs them too.
+`getByIds` stays on its own comma (its URL-length budget + POST fallback are built around it).
 **Query plus body on writes** _(settled 2026-07-09)_: `options.query` carries the query on any
 verb — heya/io's template-tag trick (``io.post(url`…?dept=${id}`, data)``) is deliberately not
 replicated; the option lowers like every other intent.
+
+**Per-API option defaults — `io.defaults(match?, bag)`** _(built 2026-07-09)_. The seam heya's
+`processOptions` covered and inspectors cannot (they see the prepared request, post-query-build):
+a declarative registry of scoped defaults bags, applied in `assemble` as the **lowest** merge
+layer — defaults ← endpoint descriptor ← per-call options — when the request's raw URL matches
+(the standard prefix/RegExp/predicate convention; unscoped = instance-global). Matching bags
+accumulate in registration order (later wins); `url` is stripped from bags at registration.
+Because defaults join before query encoding and key computation, they shape the wire _and_ the
+cache/dedup identity — the carrier for per-API `listSeparator`, `accept`, `timeout`, `retry`,
+`transport`. `io.run` stays raw (takes assembled options; no defaults). An imperative
+`io.inspect.options` was considered and deferred — the declarative registry covers config, and a
+computing hook can be added later without disturbing it.
 
 **One shared instance by default; isolation on demand.** The default export is one configured
 instance — apps configure it once (inspectors, defaults) and every module shares it. For genuine

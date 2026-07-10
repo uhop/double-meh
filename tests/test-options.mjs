@@ -53,7 +53,7 @@ test('the page option lowers to offset/limit/cursor query params', async t => {
   reset();
 });
 
-test('the query object bag: values stringify, arrays comma-join, empties drop', async t => {
+test('the query object bag: values stringify, arrays repeat by default, empties drop', async t => {
   let seen;
   serve(request => {
     seen = request.url;
@@ -75,12 +75,105 @@ test('the query object bag: values stringify, arrays comma-join, empties drop', 
   t.equal(url.searchParams.get('page'), '2', 'numbers stringify');
   t.equal(url.searchParams.get('active'), 'true', 'booleans stringify');
   t.equal(url.searchParams.get('price'), '9.99', 'custom toString() honored');
-  t.equal(url.searchParams.get('tags'), 'new,sale,7', 'arrays comma-join into one param');
-  t.equal(url.searchParams.getAll('tags').length, 1, 'a single param, not repeats');
+  t.deepEqual(
+    url.searchParams.getAll('tags'),
+    ['new', 'sale', '7'],
+    'arrays repeat keys by default — no separator-in-item ambiguity'
+  );
   t.notOk(url.searchParams.has('empty'), 'an empty array contributes nothing');
   t.notOk(url.searchParams.has('missing'), 'undefined drops');
   t.notOk(url.searchParams.has('none'), 'null drops');
   reset();
+});
+
+test('listSeparator: a string joins query lists; the builders follow', async t => {
+  let seen;
+  serve(request => {
+    seen = request.url;
+    return json({});
+  });
+  await io.get(
+    'https://example.com/sep',
+    {tags: ['new', 'sale']},
+    {listSeparator: '|', fields: ['id', 'name']}
+  );
+  let url = new URL(seen);
+  t.equal(url.searchParams.get('tags'), 'new|sale', 'the bag joins with the separator');
+  t.equal(url.searchParams.get('fields'), 'id|name', 'fields follow an explicit separator');
+
+  await io.get('https://example.com/sep2', {tags: ['a', 'b']}, {listSeparator: ','});
+  url = new URL(seen);
+  t.equal(url.searchParams.get('tags'), 'a,b', 'comma is an explicit choice');
+  t.equal(url.searchParams.getAll('tags').length, 1, 'a single param');
+  reset();
+});
+
+test('listSeparator: fields keep their protocol comma unless overridden', async t => {
+  let seen;
+  serve(request => {
+    seen = request.url;
+    return json({});
+  });
+  await io.get('https://example.com/f1', null, {fields: ['id', 'name']});
+  let url = new URL(seen);
+  t.equal(url.searchParams.get('fields'), 'id,name', 'unset → comma (the article convention)');
+
+  await io.get('https://example.com/f2', null, {fields: ['id', 'name'], listSeparator: null});
+  url = new URL(seen);
+  t.deepEqual(
+    url.searchParams.getAll('fields'),
+    ['id', 'name'],
+    'an explicit null flips the builders to repeated keys'
+  );
+  reset();
+});
+
+test('io.defaults: scoped option defaults apply; per-call options win', async t => {
+  const dm = io.create();
+  let seen;
+  dm.mock(
+    () => true,
+    request => {
+      seen = request.url;
+      return json({});
+    }
+  );
+  dm.defaults('https://legacy.example.com/', {listSeparator: ','});
+  dm.defaults({timeout: 60_000}); // global (unscoped) bag
+
+  await dm.get('https://legacy.example.com/units', {tags: ['a', 'b']});
+  let url = new URL(seen);
+  t.equal(url.searchParams.get('tags'), 'a,b', 'the scoped default applied');
+
+  await dm.get('https://other.example.com/units', {tags: ['a', 'b']});
+  url = new URL(seen);
+  t.deepEqual(url.searchParams.getAll('tags'), ['a', 'b'], 'a non-matching scope is untouched');
+
+  await dm.get('https://legacy.example.com/units', {tags: ['a', 'b']}, {listSeparator: null});
+  url = new URL(seen);
+  t.deepEqual(url.searchParams.getAll('tags'), ['a', 'b'], 'per-call options beat the default');
+});
+
+test('io.defaults: later registrations win; url in a bag is ignored', async t => {
+  const dm = io.create();
+  let seen;
+  dm.mock(
+    () => true,
+    request => {
+      seen = request.url;
+      return json({});
+    }
+  );
+  dm.defaults(/example\.com/, {listSeparator: '|'});
+  dm.defaults('https://legacy.example.com/', {
+    listSeparator: ';',
+    url: 'https://evil.invalid/' // must not redirect anything
+  });
+
+  await dm.get('https://legacy.example.com/units', {tags: ['a', 'b']});
+  const url = new URL(seen);
+  t.equal(url.hostname, 'legacy.example.com', 'the url never comes from a defaults bag');
+  t.equal(url.searchParams.get('tags'), 'a;b', 'the later matching bag wins');
 });
 
 test('a URLSearchParams query rides verbatim — the repeated-params escape hatch', async t => {

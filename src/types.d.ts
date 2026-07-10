@@ -28,6 +28,13 @@ export interface Options {
   url: string | URL;
   method?: Method;
   query?: QueryInput;
+  /**
+   * How arrays serialize in the query. A string joins each list into one parameter (`','` →
+   * `?tags=a,b`; note `URLSearchParams` percent-encodes the separator on the wire); `null` (or
+   * unset) → repeated keys (`?tags=a&tags=b`), the ambiguity-free default. An explicit value also
+   * governs `fields`/`sort`/`expand`, whose own unset default stays `','` (their protocol form).
+   */
+  listSeparator?: string | null;
   data?: unknown;
   headers?: HeaderDict | Headers;
   signal?: AbortSignal;
@@ -455,6 +462,15 @@ export interface IO extends Verbs {
     request(fn: RequestInspector, match?: InspectorMatch): IO;
     response(fn: ResponseInspector, match?: InspectorMatch): IO;
   };
+  optionDefaults: {match?: InspectorMatch; bag: Overrides}[];
+  /**
+   * Registers scoped option defaults — the lowest merge layer, applied before the endpoint
+   * descriptor and per-call options when the request's raw URL matches. Matching bags accumulate
+   * in registration order (later wins); a bag never carries `url`. Omit `match` for
+   * instance-global defaults. The seam for per-API config: `listSeparator`, `accept`, `timeout`…
+   */
+  defaults(bag: Overrides): IO;
+  defaults(match: InspectorMatch, bag: Overrides): IO;
   registerData(processor: DataProcessor): IO;
   registerMime(processor: MimeProcessor): IO;
   attach(service: Service): IO;

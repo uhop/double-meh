@@ -3,8 +3,10 @@ const noBody = {GET: 1, HEAD: 1, OPTIONS: 1};
 
 const base = () => (typeof location !== 'undefined' && location ? location.href : undefined);
 
-const appendList = (params, key, list) => {
-  if (Array.isArray(list) && list.length) params.append(key, list.join(','));
+const appendList = (params, key, list, separator) => {
+  if (!Array.isArray(list) || !list.length) return;
+  if (separator == null) for (const item of list) params.append(key, String(item));
+  else params.append(key, list.join(separator));
 };
 
 const bustValue = () => Date.now().toString(36) + '-' + ((Math.random() * 1e9) | 0).toString(36);
@@ -13,23 +15,26 @@ const buildQuery = options => {
   const params = new URLSearchParams();
   const method = (options.method || 'GET').toUpperCase();
   const dict = options.query != null ? options.query : noBody[method] ? options.data : undefined;
+  const sep = options.listSeparator;
+  // the generic bag defaults to repeated keys (no separator-in-item ambiguity);
+  // fields/sort/expand keep their protocol comma — an explicit listSeparator governs both
+  const bagSeparator = typeof sep === 'string' ? sep : null;
+  const builderSeparator = sep === undefined ? ',' : bagSeparator;
   let raw = '';
   if (typeof URLSearchParams !== 'undefined' && dict instanceof URLSearchParams) {
     for (const [key, value] of dict) params.append(key, value);
   } else if (dict != null && typeof dict === 'object') {
     for (const [key, value] of Object.entries(dict)) {
-      // arrays comma-join like fields/sort/expand; repeated params ride a URLSearchParams instead
-      if (Array.isArray(value)) {
-        if (value.length) params.append(key, value.join(','));
-      } else if (value != null) params.append(key, String(value));
+      if (Array.isArray(value)) appendList(params, key, value, bagSeparator);
+      else if (value != null) params.append(key, String(value));
     }
   } else if (dict != null) {
     // scalar → raw query segment (URLSearchParams can't emit a keyless value); '' contributes nothing
     raw = typeof dict === 'string' ? dict : String(dict);
   }
-  appendList(params, 'fields', options.fields);
-  appendList(params, 'sort', options.sort);
-  appendList(params, 'expand', options.expand);
+  appendList(params, 'fields', options.fields, builderSeparator);
+  appendList(params, 'sort', options.sort, builderSeparator);
+  appendList(params, 'expand', options.expand, builderSeparator);
   if (options.page && typeof options.page === 'object') {
     for (const key of ['offset', 'limit', 'cursor']) {
       if (options.page[key] != null) params.append(key, String(options.page[key]));
