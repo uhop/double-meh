@@ -339,7 +339,7 @@ export interface Bundle {
   minSize: number;
   /** Safety auto-flush for named bundles whose explicit flush never comes, ms. */
   maxWait: number;
-  /** Also write unpacked parts into the Cache API: a cache name, or `true` for "io-bundle". */
+  /** Also write unpacked parts into the Cache API: a cache name, or `true` for "io-shared" (the SW shared tier). */
   writeThrough: boolean | string;
   theDefault: ServiceDefault;
   isActive: boolean;
@@ -350,6 +350,23 @@ export interface Bundle {
   flush(name?: string): Promise<void>;
   submit(requests: ReadonlyArray<string | Options>, opts?: {id?: string}): Promise<unknown>[];
   fly(targets: ReadonlyArray<string | Target>): Promise<Envelope>[];
+}
+
+export interface SW {
+  /** The library name announced in `io:hello`. */
+  library: string;
+  /** Whether the environment has Service Worker support at all. */
+  supported: boolean;
+  /** True while a Service Worker has answered the hello handshake. */
+  connected: boolean;
+  /** The contract version the SW answered with (0 = not connected). */
+  contract: number;
+  /** The SW's own version string. */
+  version: string;
+  /** Capabilities the SW advertised (e.g., 'cache', 'bundle', 'transport'). */
+  capabilities: string[];
+  /** Re-announces `io:hello`: resolves with the state on reply, `null` on timeout or no SW. */
+  hello(): Promise<SW | null>;
 }
 
 export type UpdateFn<T> = (data: T) => T | undefined | Promise<T | undefined>;
@@ -378,6 +395,8 @@ export interface IO extends Verbs {
   retry: Retry;
   mock: Mock;
   bundle: Bundle;
+  /** Present after `installSW(io)` (the opt-in `double-meh/sw.js` module). */
+  sw?: SW;
   create(): IO;
   update<T = unknown>(target: Target, fn: UpdateFn<T>, options?: Overrides): Promise<T>;
   paginate<T = unknown>(url: Target, data?: unknown, options?: Overrides): AsyncIterableIterator<T>;

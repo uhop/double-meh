@@ -524,8 +524,9 @@ GET-only; never `stream`/records/SSE; never `bust`; `track: 'wait'` skips (nothi
   (explicit flush removes the window wait entirely — the synchronous-burst case pays zero delay).
 - Config: `url`, `waitTime` (20), `maxSize` (20 — overflow chunks into several sends), `minSize`
   (2 — degenerate bundles are sent as plain individual requests), `maxWait` (named-bundle safety),
-  `writeThrough: false | cacheName` (also write unpacked parts into the Cache API so a controlling
-  SW serves them to unadorned `fetch()`).
+  `writeThrough: false | true | cacheName` (also write unpacked parts into the Cache API so a
+  controlling SW serves them to unadorned `fetch()`; `true` = `io-shared`, lockstep with the SW
+  sibling's cache-tier default).
 - **Multiple bundlers**: `io.bundle.register({url, match, …overrides})` — `match` is the scoped-
   inspector matcher convention (URL prefix | RegExp | predicate); first match wins; the default
   bundler is the catch-all. Each bundler keeps its own window and pending pool.
@@ -769,6 +770,17 @@ navigations). Costs: signals/progress don't cross (correlated abort messages ins
 structured-clone limits on bodies, DevTools attribution moves to the SW. It is the transport for
 the prefetch/adopt class; interactive traffic stays on native fetch. The SW core has **two
 intakes** — fetch events and messages — feeding one scheduler.
+
+**Built 2026-07-09 (page half)** — `src/sw.js` (opt-in import): `installSW(io)` registers the
+`sw` message transport (`transport: 'sw'` — `io:fetch`/`io:result` over a transferred
+`MessageChannel` port, re-minted `Response`s, null-body statuses handled, request bodies refused)
+and announces `io:hello {library}` when a controlling SW is present, re-announcing on
+`controllerchange` (a new controller starts with an empty client registry — client-wins bundling
+depends on the announce). State lives on `io.sw`
+(`connected`/`contract`/`version`/`capabilities`/`hello()`), with an `sw` event on connect and
+disconnect. `writeThrough: true` lands parts in `io-shared` — lockstep with the SW sibling's
+cache-tier default. The `serviceWorker` container is injectable, so the fake-driven suite runs on
+all runtimes and real Chromium.
 
 **Delivery — a sibling project; one codebase, two forms.** The SW side is a browser-only sibling
 (the `heya/io` + `heya/bundler` precedent; the example-server repo is the third leg). It ships as

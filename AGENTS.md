@@ -45,6 +45,7 @@ double-meh/
 │   ├── helpers.js        # io.update(), io.paginate(), io.getByIds()
 │   ├── encoders.js       # compress option: gzip/deflate; encoders/ holds opt-in br/zstd (node:zlib)
 │   ├── code-forward.js   # __doubleMeh prelude protocol
+│   ├── sw.js             # Opt-in page half of the SW contract (io:hello + the 'sw' transport)
 │   ├── services/         # track, cache, retry, mock
 │   ├── storage/          # cache backends: memory (default), fs, sqlite, cache-api
 │   └── transports/       # fetch

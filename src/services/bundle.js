@@ -243,7 +243,8 @@ export const installBundle = io => {
         status < 300
       ) {
         caches
-          .open(writeThrough === true ? 'io-bundle' : String(writeThrough))
+          // 'io-shared' is lockstep with the double-meh-sw cache-tier default (src/sw.js SHARED_CACHE)
+          .open(writeThrough === true ? 'io-shared' : String(writeThrough))
           .then(cache => cache.put(part.url, toResponse(part)))
           .catch(() => {});
       }

@@ -2,6 +2,7 @@ import test from 'tape-six';
 
 import {io, json, serve, reset} from './helper.mjs';
 import {BUNDLE_MIME} from '../src/services/bundle.js';
+import {SHARED_CACHE} from '../src/sw.js';
 
 const BASE = 'https://example.com';
 const DATA = {
@@ -383,5 +384,36 @@ test(
     t.ok(hit, 'part written through');
     t.deepEqual(await hit.json(), {via: 'sw'}, 'with its body');
     await caches.delete('io-bundle-test').catch(() => {});
+  }
+);
+
+test(
+  'bundle: writeThrough === true lands in the shared SW tier',
+  {skip: typeof caches === 'undefined'},
+  async t => {
+    const dm = io.create();
+    dm.mock(
+      () => true,
+      () =>
+        bundleResponse([
+          {
+            url: BASE + '/wts',
+            status: 200,
+            headers: {'content-type': 'application/json'},
+            body: {via: 'shared'}
+          }
+        ])
+    );
+    dm.bundle.writeThrough = true;
+    await dm.get(BASE + '/warmup-shared');
+    const cache = await caches.open(SHARED_CACHE);
+    let hit;
+    for (let i = 0; i < 50 && !hit; ++i) {
+      await tick();
+      hit = await cache.match(BASE + '/wts');
+    }
+    t.ok(hit, 'part written to the shared tier');
+    t.deepEqual(await hit.json(), {via: 'shared'}, 'with its body');
+    await caches.delete(SHARED_CACHE).catch(() => {});
   }
 );
