@@ -18,7 +18,7 @@ export interface RetryConfig {
   continueRetries?(response: Response, attempt: number, options: Options): boolean;
 }
 
-export interface DownloadProgress {
+export interface Progress {
   loaded: number;
   total: number;
   lengthComputable: boolean;
@@ -71,7 +71,14 @@ export interface Options {
   bundle?: boolean | string;
   idempotencyKey?: boolean | string;
   force?: boolean;
-  onDownloadProgress?(info: DownloadProgress): void;
+  onDownloadProgress?(info: Progress): void;
+  /**
+   * Fires as request-body bytes are handed to the transport (post-compression). Stream bodies
+   * meter per chunk (`lengthComputable: false`); a buffered body gets one completion event when
+   * the response arrives — `fetch` exposes no granular upload progress for buffered sends.
+   * Bodies whose final encoding the platform owns (`FormData`, `URLSearchParams`) report nothing.
+   */
+  onUploadProgress?(info: Progress): void;
   meta?: Record<string, unknown>;
 }
 

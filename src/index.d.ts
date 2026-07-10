@@ -57,7 +57,7 @@ export type {
   Bundle,
   BundlerConfig,
   DecodeMode,
-  DownloadProgress,
+  Progress,
   StreamDuplex,
   RecordsOverrides,
   SseEvent,

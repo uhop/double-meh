@@ -239,11 +239,50 @@ export const createIO = () => {
     return {url: buildUrl(options), method, headers, body, signal: options.signal};
   };
 
+  const byteSize = body => {
+    if (typeof body === 'string') return new TextEncoder().encode(body).byteLength;
+    if (
+      typeof ArrayBuffer !== 'undefined' &&
+      (body instanceof ArrayBuffer || ArrayBuffer.isView(body))
+    )
+      return body.byteLength;
+    if (typeof Blob !== 'undefined' && body instanceof Blob) return body.size;
+    return undefined; // FormData/URLSearchParams: the platform owns the final encoding
+  };
+
+  const meterUpload = (request, ctx, send) => {
+    const fn = ctx.options.onUploadProgress;
+    if (typeof fn !== 'function' || request.body == null) return send();
+    if (isReadableStream(request.body)) {
+      // a locked stream is a spent attempt: let the transport surface its own error
+      if (!request.body.locked) {
+        let loaded = 0;
+        request.body = request.body.pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              loaded += chunk.byteLength || chunk.length || 0;
+              controller.enqueue(chunk);
+              fn({loaded, total: 0, lengthComputable: false});
+            }
+          })
+        );
+      }
+      return send();
+    }
+    const total = byteSize(request.body);
+    if (total === undefined) return send();
+    // fetch has no upload events for buffered sends: one completion event once the response arrives
+    return send().then(response => {
+      fn({loaded: total, total, lengthComputable: true});
+      return response;
+    });
+  };
+
   const dispatch = (request, ctx) => {
     const transport = io.transports[ctx.options.transport] || io.defaultTransport;
     if (!transport)
       return Promise.reject(new FailedIO('No transport configured', undefined, ctx.options));
-    let next = () => Promise.resolve(transport(request, ctx));
+    let next = () => meterUpload(request, ctx, () => Promise.resolve(transport(request, ctx)));
     for (const service of io.services) {
       const downstream = next;
       next = () =>
