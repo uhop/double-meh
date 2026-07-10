@@ -86,6 +86,40 @@ test('compress: a stream body stays a stream', async t => {
   reset();
 });
 
+test('compress: an inline encoder function is the escape hatch', async t => {
+  let seen;
+  serve(request => {
+    seen = request;
+    return json({ok: true});
+  });
+  let called = 0;
+  const encoder = source => {
+    ++called;
+    return source.pipeThrough(new CompressionStream('gzip'));
+  };
+  await io.post('https://example.com/zi', PAYLOAD, {compress: encoder});
+  t.equal(called, 1, 'the inline encoder ran');
+  t.equal(seen.headers.get('content-encoding'), null, 'no automatic Content-Encoding — no name');
+  t.deepEqual(JSON.parse(await decompress(seen.body, 'gzip')), PAYLOAD, 'roundtrips');
+  reset();
+});
+
+test('compress: an inline encoder pairs with an explicit header', async t => {
+  let seen;
+  serve(request => {
+    seen = request;
+    return json({ok: true});
+  });
+  const encoder = source => source.pipeThrough(new CompressionStream('deflate'));
+  await io.post('https://example.com/zih', PAYLOAD, {
+    compress: encoder,
+    headers: {'Content-Encoding': 'deflate'}
+  });
+  t.equal(seen.headers.get('content-encoding'), 'deflate', 'the caller-set header rides through');
+  t.deepEqual(JSON.parse(await decompress(seen.body, 'deflate')), PAYLOAD, 'roundtrips');
+  reset();
+});
+
 test('compress: a FormData body refuses loudly', async t => {
   serve(() => json({ok: true}));
   const form = new FormData();

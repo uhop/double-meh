@@ -841,7 +841,10 @@ readable, response}`), rebuilt on fetch/undici streams (`duplex:'half'`). Pipe a
   verbatim + `quality`/`level` sugar) register named policy variants. Best-effort by construction:
   the platform `CompressionStream` pair has no knobs (the web standard takes only the format name);
   passing `gzip`/`deflate` options replaces them with parameterized `node:zlib` versions (CLI
-  only). heya-io-node's decode side and `Accept-Encoding` management are obsolete — fetch
+  only). **Inline escape hatch** _(2026-07-09)_: `compress: fn` accepts an encoder function
+  directly, mirroring `decode: fn` — one-off, registry untouched, and no automatic
+  `Content-Encoding` (no name; the caller sets the header). heya-io-node's decode side and
+  `Accept-Encoding` management are obsolete — fetch
   decompresses natively. Buffered bodies re-buffer (keeps `Content-Length`); stream bodies stay
   streams; `FormData`/`URLSearchParams` throw (the transport owns their encoding).
 

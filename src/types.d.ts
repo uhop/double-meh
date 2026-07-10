@@ -62,8 +62,11 @@ export interface Options {
   track?: boolean | 'wait';
   mock?: boolean;
   retry?: boolean | number | RetryConfig;
-  /** Compress the request body: an encoder name from `io.encoders`, or `true` for gzip. */
-  compress?: boolean | ('gzip' | 'deflate' | 'br' | 'zstd' | (string & {}));
+  /**
+   * Compress the request body: an encoder name from `io.encoders`, `true` for gzip, or an inline
+   * encoder function (which owns its own `Content-Encoding` header — set it via `headers`).
+   */
+  compress?: boolean | ('gzip' | 'deflate' | 'br' | 'zstd' | (string & {})) | CompressionEncoder;
   /** Join a bundle: `true` = the default window; a string names a bundle for `io.bundle.flush(name)`. */
   bundle?: boolean | string;
   idempotencyKey?: boolean | string;

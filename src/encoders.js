@@ -14,8 +14,9 @@ export const installEncoders = io => {
   // registered at assemble time, so it runs before user inspectors: body signers see the final bytes
   io.inspect.request(async (request, options) => {
     if (!options.compress || request.body == null) return;
+    const inline = typeof options.compress === 'function';
     const name = options.compress === true ? 'gzip' : options.compress;
-    const encoder = io.encoders[name];
+    const encoder = inline ? options.compress : io.encoders[name];
     if (typeof encoder !== 'function') {
       throw new TypeError('io: unknown compression encoder: ' + name);
     }
@@ -33,7 +34,8 @@ export const installEncoders = io => {
     const compressed = await encoder(source, options);
     // a buffered body stays buffered: keeps Content-Length semantics and works over h1 everywhere
     request.body = wasStream ? compressed : await new Response(compressed).arrayBuffer();
-    request.headers.set('Content-Encoding', name);
+    // an inline encoder has no name: its owner sets Content-Encoding via headers
+    if (!inline) request.headers.set('Content-Encoding', /** @type {string} */ (name));
     return request;
   });
 
