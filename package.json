@@ -85,7 +85,7 @@
     "prettier": "^3.9.4",
     "tape-six": "^1.13.0",
     "tape-six-playwright": "^1.2.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "wiki-search-index": "^0.2.0"
   }
 }
