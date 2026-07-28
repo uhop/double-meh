@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 
 const ctOf = async (as, body = 'raw') => {
   let ct;

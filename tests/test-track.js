@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 
 test('track dedupes concurrent identical GETs', async t => {
   let calls = 0;

@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 
 test('update: reads, applies fn, conditionally PUTs with the captured ETag', async t => {
   const srv = {value: {n: 1}, etag: '"v1"'};

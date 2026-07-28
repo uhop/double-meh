@@ -1,6 +1,6 @@
 import test from 'tape-six';
 
-import {io, json} from './helper.mjs';
+import {io, json} from './helper.js';
 
 // a complete envelope plugin exercising every seam — the pluggable-types reference example:
 // requests wrap into {v: 1, payload}, responses unwrap, faults surface as BadStatus either way

@@ -38,6 +38,9 @@ export declare const mock: Mock;
 export declare const bundle: Bundle;
 export declare const update: IO['update'];
 export declare const adopt: IO['adopt'];
+export declare const paginate: IO['paginate'];
+export declare const getByIds: IO['getByIds'];
+export declare const encoders: IO['encoders'];
 export {installCodeForward} from './code-forward.js';
 
 export {IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';

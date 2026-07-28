@@ -1,7 +1,7 @@
 import test from 'tape-six';
 import zlib from 'node:zlib';
 
-import {io, json, serve, reset} from '../helper.mjs';
+import {io, json, serve, reset} from '../helper.js';
 import {installZlibEncoders, brotliEncoder, gzipEncoder} from '../../src/encoders/zlib.js';
 import {create} from '../../src/index.js';
 

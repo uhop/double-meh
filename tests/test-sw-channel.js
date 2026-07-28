@@ -1,7 +1,7 @@
 import test from 'tape-six';
 
-import {io, json} from './helper.mjs';
-import {makeWorker, makeContainer, tick} from './helper-sw.mjs';
+import {io, json} from './helper.js';
+import {makeWorker, makeContainer, tick} from './helper-sw.js';
 import {installChannel, installSW} from '../src/sw.js';
 
 const BASE = 'https://example.com';

@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 
 test('GETs are cached by default; cache:false opts out', async t => {
   let calls = 0;

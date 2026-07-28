@@ -1,6 +1,6 @@
 import test from 'tape-six';
 
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 
 const PAYLOAD = {message: 'upload progress measures the outgoing body '.repeat(20)};
 

@@ -1,6 +1,6 @@
 import test from 'tape-six';
 
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 import {BUNDLE_MIME} from '../src/services/bundle.js';
 import {SHARED_CACHE} from '../src/sw.js';
 

@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 
 test('options.fetch passes RequestInit fields through to fetch()', async t => {
   const realFetch = globalThis.fetch;

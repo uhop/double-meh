@@ -24,10 +24,10 @@ npm install
 - **Test (Bun):** `npm run test:bun`
 - **Test (Deno):** `npm run test:deno`
 - **Test (sequential):** `npm run test:seq` (also `test:seq:bun`, `test:seq:deno`)
-- **Test (single file):** `node tests/test-<name>.mjs`
+- **Test (single file):** `node tests/test-<name>.js`
 - **Test (browser, Chromium via Playwright):** `npm run test:browser`; `npm run test:browser:h2` adds HTTP/2 (enables the duplex upload-streaming suite)
 - **Install the browser it needs:** `npm run browser:install` (once per machine). Nothing downloads at install time: `.npmrc` sets `ignore-scripts=true`, which blocks `tape-six-playwright`'s postinstall on every npm version. Do not swap it for `package.json`'s `allowScripts` — that field needs npm 11.16+, so the npm 10.9 that Node 22 bundles ignores it silently and the postinstall runs anyway.
-- **TypeScript check (`.d.ts`/`.mts` contracts):** `npm run ts-check`
+- **TypeScript check (`.d.ts` contracts):** `npm run ts-check`
 - **JS implementation check (`checkJs` over `src/`):** `npm run js-check`
 - **TypeScript tests:** `npm run ts-test` (also `ts-test:bun`, `ts-test:deno`)
 - **Lint:** `npm run lint` (Prettier check)
@@ -96,10 +96,12 @@ test('example', async t => {
 });
 ```
 
-- Test files use `tape-six`: `.mjs` for runtime tests, `.mts` for TypeScript typing tests.
+- Test files use `tape-six`. Extensions are plain — `.js` for runtime tests, `.ts` for TypeScript
+  typing tests. Reach for a module-specific extension only when the file has to contradict the
+  package: this is a `type: module` package, so the CJS consumption test is `tests/cli/test-cjs.cjs`.
 - Test file naming convention: `test-*.*js` and `test-*.*ts`.
 - Tests are configured in `package.json` under the `"tape6"` section.
-- Test files should be directly executable: `node tests/test-foo.mjs`.
+- Test files should be directly executable: `node tests/test-foo.js`.
 
 ## Key conventions
 

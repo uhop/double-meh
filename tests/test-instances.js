@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 import {createIO} from '../src/io.js';
 
 test('io.create() yields an isolated, fully equipped instance', async t => {

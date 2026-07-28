@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import {io, json, serve, reset} from './helper.mjs';
+import {io, json, serve, reset} from './helper.js';
 
 const decompress = async (body, format) =>
   new Response(new Response(body).body.pipeThrough(new DecompressionStream(format))).text();

@@ -84,12 +84,12 @@ src/sw.js                                                (opt-in import)
 
 - **Framework**: tape-six (`tape6`)
 - **Run all**: `npm test` (parallel workers via `tape6 --flags FO`)
-- **Run single file**: `node tests/test-<name>.mjs`
+- **Run single file**: `node tests/test-<name>.js`
 - **Run with Bun**: `npm run test:bun`
 - **Run with Deno**: `npm run test:deno`
 - **Run in a browser**: `npm run test:browser` (Chromium via tape-six-playwright, h1);
   `npm run test:browser:h2` switches the test server to HTTP/2, which un-skips the Chromium-only
-  `io.stream` duplex upload-streaming suite (`tests/web/test-web-duplex.mjs`)
+  `io.stream` duplex upload-streaming suite (`tests/web/test-web-duplex.js`)
 - **Run sequential**: `npm run test:seq` (also `test:seq:bun`, `test:seq:deno`)
 - **TypeScript check**: `npm run ts-check`
 - **JS implementation check**: `npm run js-check` (checkJs over `src/`)

@@ -271,7 +271,7 @@ multi-value). `url\`\`` tagged template for sanitized interpolation stays.
   `BadStatus` **throwable from a decode** for envelope-level faults inside a 2xx (IOErrors pass the
   error mapping unwrapped; such responses cache like any 2xx — repeats throw consistently until
   invalidated). A plugin ships as an install function (`installX(io, options?)`, the family
-  convention). Reference example: `tests/test-plugin.mjs` + wiki "Concepts: pluggable envelopes".
+  convention). Reference example: `tests/test-plugin.js` + wiki "Concepts: pluggable envelopes".
   **SOAP is a separate project** consuming this surface; Eugene's JSON↔XML reflection gist
   (`XmlBuilder.js`/`applyXml.js`/`xml2json.js`,
   https://gist.github.com/uhop/7acab057b9d71bcab1e066194d5e9c4f) supplies the object→XML principles —
