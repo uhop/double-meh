@@ -34,6 +34,7 @@
     "test:seq:deno": "deno run -A `tape6-seq --self` --flags FO",
     "test:browser": "tape6-playwright --start-server --flags FO",
     "test:browser:h2": "tape6-playwright --start-server --h2 --flags FO",
+    "browser:install": "npx playwright install chromium",
     "ts-check": "tsc --noEmit",
     "js-check": "tsc --project tsconfig.check.json",
     "ts-test": "tape6 --flags FO 'tests/test-*.*ts'",

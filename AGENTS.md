@@ -26,6 +26,7 @@ npm install
 - **Test (sequential):** `npm run test:seq` (also `test:seq:bun`, `test:seq:deno`)
 - **Test (single file):** `node tests/test-<name>.mjs`
 - **Test (browser, Chromium via Playwright):** `npm run test:browser`; `npm run test:browser:h2` adds HTTP/2 (enables the duplex upload-streaming suite)
+- **Install the browser it needs:** `npm run browser:install` (once per machine). Nothing downloads at install time: `.npmrc` sets `ignore-scripts=true`, which blocks `tape-six-playwright`'s postinstall on every npm version. Do not swap it for `package.json`'s `allowScripts` — that field needs npm 11.16+, so the npm 10.9 that Node 22 bundles ignores it silently and the postinstall runs anyway.
 - **TypeScript check (`.d.ts`/`.mts` contracts):** `npm run ts-check`
 - **JS implementation check (`checkJs` over `src/`):** `npm run js-check`
 - **TypeScript tests:** `npm run ts-test` (also `ts-test:bun`, `ts-test:deno`)
