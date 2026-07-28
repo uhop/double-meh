@@ -1,26 +1,114 @@
 # double-meh
 
-> <!-- TODO: Replace with actual project description -->
-> HTTP I/O. A lightweight, zero-dependency micro-package.
+> A modern, fetch-native HTTP I/O library for browsers and CLIs (Node, Bun, Deno) — a thin, DX-first layer over `fetch()`. The method declares the return shape; options tune behavior, never shape. Composable services (in-flight dedup, app-governed cache, verb-aware retry, serverless mocking, request bundling), web-native streaming in both directions, parsed record iteration, and a reconnecting SSE client. REST correctness (conditional writes, idempotency keys, `problem+json`, content negotiation) is a per-call one-liner. Zero runtime dependencies, ESM-only, hand-written TypeScript typings.
 
 ## Install
 
 npm i double-meh
 
+ESM-only. CJS consumers can `require('double-meh')` on Node >= 20.19 (`require(esm)`); the module graph carries no top-level await, which is what keeps that path synchronous.
+
 ## Quick start
 
-<!-- TODO: Replace with actual quick start example -->
-
 ```js
-import doubleMeh from 'double-meh';
+import io from 'double-meh';
+
+const person = await io.get('https://api.example.com/people/42'); // parsed data
+const {data, etag} = await io.full.get('https://api.example.com/people/42'); // envelope
+const body = await io.stream.get('https://api.example.com/big'); // ReadableStream
+
+await io.post('https://api.example.com/people', {name: 'Ann'}); // objects go out as JSON
+await io.put('https://api.example.com/people/42', person, {ifMatch: etag}); // 412, not a lost write
+await io.del('https://api.example.com/people/42'); // io.delete / io.remove — same verb
 ```
 
-## API
+## Entry points
 
-<!-- TODO: Document the public API as modules are added -->
+The `exports` map is `{".": "./src/index.js", "./*": "./src/*"}` — a non-transforming wildcard, so
+subpath imports carry the `.js` extension.
+
+- `double-meh` — the shared, fully configured instance (default export) plus every named export.
+- `double-meh/io.js` — `createIO()`, the bare pipeline with no services attached.
+- `double-meh/transports/fetch.js` — `fetchTransport`, the one core transport.
+- `double-meh/services/{track,cache,retry,mock,bundle}.js` — `installTrack`, `installCache`, `installRetry`, `installMock`, `installBundle`.
+- `double-meh/storage/{memory,fs,sqlite,cache-api}.js` — cache backends: `memoryStorage`, `fsStorage`, `sqliteStorage`, `cacheApiStorage`.
+- `double-meh/encoders/zlib.js` — `installZlibEncoders` plus `gzipEncoder`, `deflateEncoder`, `brotliEncoder`, `zstdEncoder` (br/zstd via `node:zlib`, kept out of browser bundles).
+- `double-meh/sw.js` — `installSW`, `installChannel`, `SHARED_CACHE`, `CHANNEL` (page half of the Service Worker contract).
+
+## Core API
+
+`io` is callable and carries the verbs: `get`, `head`, `post`, `put`, `patch`, `delete` (aliases
+`del`, `remove`), `options`. Every verb is `(url, data?, options?)`; `url` may be a string, a `URL`,
+or a reusable options bag acting as an endpoint descriptor.
+
+Return shape is chosen by the namespace, never by an option:
+
+- `io.get(url)` -> `Promise<T>` — the parsed data.
+- `io.full.get(url)` -> `Promise<Envelope<T>>` — `{data, status, ok, response, headers}` plus lazy `etag`, `weak`, `lastModified`, `location`, `links`, `contentType`, `retryAfter`, `serverTiming`.
+- `io.stream.get(url)` -> `Promise<ReadableStream>`; `io.stream.put/post/patch(url, options?)` -> `{writable, readable, response}` duplex.
+- `io.records.get/post(url, data?, options?)` -> `AsyncIterableIterator<T>` — JSONL / `json-seq` framing.
+- `io.sse(url, data?, options?)` -> `AsyncIterableIterator<SseEvent>` — reconnecting; `io.sse.reconnectDelay`.
+
+Helpers: `io.update(target, fn)` (read -> apply -> conditional PUT, with 412 -> re-read -> retry),
+`io.paginate(url)` (row iterator across pages), `io.getByIds(url, ids)` (falls back to POST past
+`getByIds.urlLimit`, default 2000), `io.adopt(target, responseOrPromise)`, `io.run(target)`,
+`io.toEnvelope(response, target)`, `io.makeKey(options)`, `io.buildUrl(options)`,
+`io.makeVerb(method)`.
+
+## Options
+
+`{url, method, query, listSeparator, data, headers, signal, timeout, transport, fetch, accept, as,
+decode, ifMatch, ifNoneMatch, fields, sort, expand, page, stream, bust, ignoreBadStatus, cache,
+track, mock, retry, compress, bundle, idempotencyKey, force, onDownloadProgress, onUploadProgress,
+meta}`
+
+Notable:
+
+- `as` — request body shaping: `'merge-patch'`, `'json-patch'`, `'json'`, `'ndjson'`, `'jsonl'`, `'text'`, `'csv'`, `'html'`, `'xml'`, `'form'`, `'octet'`.
+- `decode` — `'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData'`, or a function.
+- `listSeparator` — how arrays serialize in the query. Unset/`null` = repeated keys (`?tags=a&tags=b`), the ambiguity-free default; a string joins (`','` -> `?tags=a,b`). `fields`/`sort`/`expand` default to `','` on their own.
+- `retry` — `true`, a count, or `{retries, initDelay, force, nextDelay, continueRetries}`; `continueRetries` turns retry into polling.
+- `cache` — `true`/`false` or `{ttl}`; `track` — `true`/`false`/`'wait'` (register interest without firing).
+- `compress` — an encoder name, `true` for gzip, or an inline encoder function.
+- `idempotencyKey` — `true` mints one key per logical operation, reused across retries.
+
+## Services
+
+Response-level middleware in a priority onion; each opts in per request (its own option wins) or by
+`theDefault` (boolean or predicate). Cache and track are on by default for plain GETs.
+
+- `io.track` — run-level GET dedup at the decoded-envelope level, plus `adopt`. Cancellation is refcounted: a caller's abort detaches only that caller; the wire aborts when the last waiter leaves.
+- `io.cache` — app-governed cache: `storage`, `defaultTtl`, `remove(pattern)`, `clear()`, `sweep()`, `save()`, `idle()`. Honors `Vary`, revalidates with 304.
+- `io.retry` — verb-safety-aware: `retries`, `initDelay`, `maxDelay`, `nextDelay()`.
+- `io.mock(matcher, callback)` — serverless mocking through the real pipeline, so a mocked 503 really gets retried.
+- `io.bundle` — batches GETs into one request to a bundler endpoint: `url`, `waitTime`, `maxSize`, `minSize`, `maxWait`, `writeThrough`, `register(config)`, `flush(name?)`, `submit(requests)`, `fly(targets)`.
+
+## Errors
+
+`IOError` <- `FailedIO` <- `TimedOut`, and `IOError` <- `BadStatus`. A thrown `BadStatus` carries the
+same envelope shape as a success, so error handling reads like success handling; `problem+json` is
+already parsed into `error.data`. `isAbort(error)` classifies aborts.
+
+```js
+try {
+  await io.get('https://api.example.com/missing');
+} catch (error) {
+  if (error instanceof io.BadStatus) console.error(error.status, error.data?.detail);
+}
+```
+
+## Instances and extension points
+
+The default export is one shared configured instance. `io.create()` gives an isolated equivalent;
+`createIO()` from `double-meh/io.js` gives a bare pipeline.
+
+`io.defaults(match?, bag)` registers scoped option defaults — the lowest merge layer, applied before
+the endpoint descriptor and per-call options. Also `registerTransport`, `inspect.request(fn, match?)`,
+`inspect.response(fn, match?)`, `registerData`, `registerMime`, `attach(service)`, `detach(name)`, and
+the `on`/`off`/`emit` event surface.
 
 ## Links
 
 - Docs: https://github.com/uhop/double-meh/wiki
 - npm: https://www.npmjs.com/package/double-meh
-- Full LLM reference: https://github.com/uhop/double-meh/blob/master/llms-full.txt
+- Full LLM reference: https://github.com/uhop/double-meh/blob/main/llms-full.txt

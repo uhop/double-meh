@@ -1,7 +1,6 @@
 # double-meh
 
-> <!-- TODO: Replace with actual project description -->
-> HTTP I/O. A lightweight, zero-dependency micro-package. Works with Node.js and Bun. Supports both CommonJS and ESM consumers.
+> A modern, fetch-native HTTP I/O library for browsers and CLIs (Node, Bun, Deno) — a thin, DX-first layer over `fetch()`. Spend the effort on setup (inspectors, services, defaults) so that use stays trivial. The method declares the return shape; options tune behavior, never shape. Zero runtime dependencies, ESM-only, source published as-is with no build step, hand-written `.d.ts` sidecars.
 
 ## Quick start
 
@@ -11,31 +10,340 @@ Install:
 npm i double-meh
 ```
 
-<!-- TODO: Replace with actual quick start example -->
-
 ```js
-import doubleMeh from 'double-meh';
+import io from 'double-meh';
+
+const person = await io.get('https://api.example.com/people/42');
+const created = await io.post('https://api.example.com/people', {name: 'Ann'});
 ```
 
 ## Importing
 
-<!-- TODO: Add import examples once modules are added -->
+ESM-only. The `exports` map is `{".": "./src/index.js", "./*": "./src/*"}` — a non-transforming
+wildcard, so every subpath import carries the `.js` extension.
 
 ```js
-// ESM (default export)
-import doubleMeh from 'double-meh';
+// The shared, fully configured instance
+import io from 'double-meh';
 
-// CommonJS
-const doubleMeh = require('double-meh');
+// Named exports — all-named form when pulling several from one module
+import {get, full, stream, update, adopt, create, IOError, BadStatus} from 'double-meh';
+
+// Minimal build — bare pipeline plus only the services you want
+import {createIO} from 'double-meh/io.js';
+import {fetchTransport} from 'double-meh/transports/fetch.js';
+import {installCache} from 'double-meh/services/cache.js';
+
+// Persistent cache backends — opt-in, swapped via io.cache.storage
+import {fsStorage} from 'double-meh/storage/fs.js';
+import {sqliteStorage} from 'double-meh/storage/sqlite.js';
+import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
+
+// CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
+import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
+
+// Service-Worker integration (page half) — pairs with the double-meh-sw sibling
+import {installSW, installChannel} from 'double-meh/sw.js';
 ```
 
-## API
+CJS consumers can `require('double-meh')` on Node >= 20.19 (`require(esm)`). Every default export
+has a named mirror, so destructuring works:
 
-<!-- TODO: Document the full public API as modules are added -->
+```js
+const {io, get, full, BadStatus} = require('double-meh');
+```
+
+That path stays open only because the module graph carries no top-level await — `require(ESM)` of an
+async graph throws `ERR_REQUIRE_ASYNC_MODULE`. `tests/cli/test-cjs.cjs` pins it.
+
+## The pipeline
+
+```
+verb sugar -> buildOptions -> prepare (headers/body/url) -> request inspectors
+  -> track (run-level dedup) -> services onion (cache -> retry -> mock) -> transport
+  -> decode -> envelope -> response inspectors
+```
+
+Instances: the default export is one shared configured instance; `io.create()` gives an isolated
+equivalent with the same batteries; `createIO()` from `double-meh/io.js` gives a bare pipeline with
+no services attached.
+
+## Verbs
+
+`io` is itself callable — `io(target, data?, options?)`. It carries `get`, `head`, `post`, `put`,
+`patch`, `delete` (aliases `del` and `remove`), and `options`.
+
+- `Verb` — `<T>(url: Target, data?: unknown, options?: Overrides) => Promise<T>`
+- `MetaVerb` (`head`, `options`) — returns `Promise<Envelope>`
+- `Target` — `string | URL | Options`; an options bag acts as a reusable endpoint descriptor
+- `Overrides` — `Omit<Options, 'url'> & {url?: never}`
+
+```js
+await io.get(url);
+await io.post(url, {name: 'Ann'}); // objects go out as JSON
+await io.patch(url, {email}, {as: 'merge-patch'});
+await io.del(url);
+
+const people = {url: 'https://api.example.com/people', timeout: 5000}; // endpoint descriptor
+await io.get(people);
+await io.post(people, {name: 'Bo'});
+```
+
+## Return-shape namespaces
+
+The namespace chooses the shape. No option changes it.
+
+- `io.get(url)` -> `Promise<T>` — parsed data.
+- `io.full` — `FullNamespace`, callable and carrying every verb; each returns `Promise<Envelope<T>>`.
+- `io.stream.get(url, data?, options?)` -> `Promise<ReadableStream>`.
+- `io.stream.put/post/patch(url, options?)` -> `StreamDuplex` = `{readable, writable, response}`, where `response` is a `Promise<Envelope<T>>` that settles when status and headers arrive, before the body drains.
+- `io.records.get/post(url, data?, options?)` -> `AsyncIterableIterator<T>`; `RecordsOverrides` adds `framing?: 'jsonl' | 'json-seq'`.
+- `io.sse(url, data?, options?)` -> `AsyncIterableIterator<SseEvent>`; `SseOverrides` adds `reconnect?: boolean | number` and `lastEventId?: string`. `io.sse.reconnectDelay` is the module-level default.
+
+```js
+const body = await io.stream.get(url);
+
+const {writable, readable, response} = io.stream.put(url, {as: 'jsonl'});
+source.pipeTo(writable);
+const envelope = await response;
+
+for await (const row of io.records.get(url, null, {framing: 'jsonl'})) use(row);
+for await (const event of io.sse(url)) console.log(event.event, event.data);
+```
+
+## Envelope
+
+```ts
+interface Envelope<T = unknown> {
+  data: T;
+  status: number;
+  ok: boolean;
+  response: Response;
+  headers: HeaderDict;
+  readonly etag: string | undefined;
+  readonly weak: boolean;
+  readonly lastModified: Date | undefined;
+  readonly location: string | undefined;
+  readonly links: Record<string, string>;      // parsed Link header
+  readonly contentType: string | undefined;
+  readonly retryAfter: number | Date | undefined;
+  readonly serverTiming: ServerTimingMetric[];  // {name, dur?, desc?}
+}
+```
+
+The lazy accessors parse on first read. A thrown `BadStatus` carries the same shape.
+
+## Options
+
+```ts
+interface Options {
+  url: string | URL;
+  method?: Method;                       // 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | string
+  query?: QueryInput;                    // Record | URLSearchParams | string | number | boolean
+  listSeparator?: string | null;
+  data?: unknown;
+  headers?: HeaderDict | Headers;
+  signal?: AbortSignal;
+  timeout?: number;
+  transport?: string;
+  fetch?: Omit<RequestInit, 'method' | 'headers' | 'body' | 'signal'>;
+  accept?: string;
+  as?: 'merge-patch' | 'json-patch' | 'json' | 'ndjson' | 'jsonl' | 'text' | 'csv' | 'html' | 'xml' | 'form' | 'octet' | string;
+  decode?: DecodeMode | ((response: Response, options: Options) => unknown);
+  ifMatch?: string;
+  ifNoneMatch?: string;
+  fields?: string[];
+  sort?: string[];
+  expand?: string[];
+  page?: {offset?: number; limit?: number; cursor?: string};
+  stream?: boolean;
+  bust?: boolean | string;
+  ignoreBadStatus?: boolean;
+  cache?: boolean | {ttl?: number};
+  track?: boolean | 'wait';
+  mock?: boolean;
+  retry?: boolean | number | RetryConfig;
+  compress?: boolean | 'gzip' | 'deflate' | 'br' | 'zstd' | string | CompressionEncoder;
+  bundle?: boolean | string;
+  idempotencyKey?: boolean | string;
+  force?: boolean;
+  onDownloadProgress?(info: Progress): void;
+  onUploadProgress?(info: Progress): void;
+  meta?: Record<string, unknown>;
+}
+```
+
+Semantics worth knowing:
+
+- **`listSeparator`** — how arrays serialize in the query. A string joins each list into one parameter (`','` -> `?tags=a,b`; note `URLSearchParams` percent-encodes the separator on the wire). `null` or unset -> repeated keys (`?tags=a&tags=b`), the ambiguity-free default. An explicit value also governs `fields`/`sort`/`expand`, whose own unset default stays `','` (their protocol form).
+- **`decode`** — `DecodeMode` is `'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData'`. A `decode` override opts the request out of `track` (the cache is byte-level and unaffected).
+- **`retry`** — `RetryConfig` is `{retries?, initDelay?, force?, nextDelay?(delay, attempt, options), continueRetries?(response, attempt, options)}`. `continueRetries` turns retry into polling. Unsafe verbs are not retried without `force`.
+- **`compress`** — an encoder name from `io.encoders`, `true` for gzip, or an inline `CompressionEncoder` (which owns its own `Content-Encoding` header — set it via `headers`).
+- **`bundle`** — `true` joins the default window; a string names a bundle for `io.bundle.flush(name)`.
+- **`idempotencyKey`** — `true` mints one key per logical operation and reuses it across retries; a string supplies your own.
+- **`onUploadProgress`** — stream bodies meter per chunk (`lengthComputable: false`); a buffered body gets one completion event when the response arrives, because `fetch` exposes no granular upload progress for buffered sends. Bodies whose final encoding the platform owns (`FormData`, `URLSearchParams`) report nothing.
+- **`Progress`** — `{loaded, total, lengthComputable}`.
+
+## Helpers
+
+- `io.update<T>(target, fn, options?)` -> `Promise<T>` — read, apply `fn`, conditional PUT; a 412 re-reads and retries. `UpdateFn<T>` may return `undefined` to abort the write.
+- `io.paginate<T>(url, data?, options?)` -> `AsyncIterableIterator<T>` — iterates rows across pages.
+- `io.getByIds<T>(url, ids, options?)` -> `Promise<T>` — built GETs longer than `io.getByIds.urlLimit` (default 2000) fall back to a POST body.
+- `io.adopt(target, responseOrPromise)` -> `Promise<Envelope>` — adopt an in-flight or completed `Response` into the pipeline.
+- `io.run<T>(target)` -> `Promise<Envelope<T>>` — the raw pipeline run, bypassing option defaults.
+- `io.toEnvelope(response, target)` -> `Promise<Envelope>`.
+- `io.makeKey(options)` / `io.buildUrl(options)` / `io.makeVerb(method)`.
+- `io.inFlight` — count of live requests.
+
+## Services
+
+Response-level middleware in a priority onion. Each service opts in per request (its own option
+wins) or by `theDefault`, a `boolean | ((options: Options) => boolean)`. Cache and track are on by
+default for plain GETs. All expose `attach()` / `detach()`.
+
+### io.track — run-level GET dedup
+
+Dedup at the decoded-envelope level (decode once, share the result), keyed by the canonical
+`makeKey`; streams are skipped. `track: 'wait'` registers interest without firing. Cancellation is
+refcounted: a caller's abort detaches only that caller, rejecting with its own error; the wire
+aborts when the last waiter leaves, and a signalless caller pins it to completion.
+
+`{active, theDefault, deferred, flyByKey(key), fly(options), isFlying(options), optIn(options)}`
+
+### io.cache — app-governed cache
+
+`{storage, defaultTtl, theDefault, isActive, optIn(options), remove(pattern), clear(), sweep(), save(target, response, ttl?), idle()}`
+
+TTL plus 304 revalidation. Entries snapshot the request-header values named by the response `Vary`
+(a mismatch is a miss; `Vary: *` is never stored). `CachePattern` is `string | RegExp | (key) => boolean`.
+`cache.remove(exactUrl)` evicts all accept variants.
+
+`CacheStorage` is `{get, set, delete, clear, keys}`; a `CacheEntry` is
+`{status, statusText, headers, body, etag?, lastModified?, expiresAt, vary?}`.
+
+Backends: `memoryStorage` (default, per instance), `fsStorage` (one file per entry in the OS cache
+dir, atomic temp+rename), `sqliteStorage` (feature-detected `node:sqlite` / `bun:sqlite`, not Deno;
+async factory), `cacheApiStorage` (browser Cache API, metadata as synthetic `x-io-*` headers).
+`double-meh/storage/cache-dir.js` exports `osCacheDir` and `appCacheDir` (XDG, `~/Library/Caches`,
+`%LOCALAPPDATA%`).
+
+### io.retry — verb-safety-aware retry
+
+`{retries, initDelay, maxDelay, nextDelay(delay, attempt, options?), isActive}`
+
+### io.mock — serverless mocking
+
+`io.mock(matcher, callback?)` registers a mock; it runs through the real pipeline, so a mocked 503
+really gets retried. `MockMatcher` is `string | RegExp | ((request, ctx) => boolean)`.
+`{exact, isActive, clear()}`
+
+### io.bundle — request bundling
+
+Batches GETs into one request to a bundler endpoint and unbundles by MIME.
+
+`{url, waitTime, maxSize, minSize, maxWait, writeThrough, theDefault, isActive, optIn(options), register(config), flush(name?), submit(requests, opts?), fly(targets)}`
+
+`BundlerConfig` is `{url, match?, waitTime?, maxSize?, minSize?, maxWait?}`. `writeThrough` also
+writes unpacked parts into the Cache API — a cache name, or `true` for the shared SW tier.
+`double-meh/services/bundle.js` also exports `REQUEST_MIME` and `BUNDLE_MIME`.
+
+## Errors
+
+```
+IOError
+├── FailedIO
+│   └── TimedOut
+└── BadStatus
+```
+
+`BadStatus` also implements `Envelope`, so `error.status`, `error.data`, `error.headers`, and the
+lazy accessors are all there; `problem+json` arrives already parsed. `isAbort(error)` classifies
+aborts across engines (they disagree on abort-listener vs promise-reaction settle order, so the
+mapping is deterministic rather than order-dependent). `ignoreBadStatus: true` returns the envelope
+instead of throwing.
+
+```js
+import io, {isAbort} from 'double-meh';
+
+try {
+  await io.get(url);
+} catch (error) {
+  if (isAbort(error)) return;
+  if (error instanceof io.BadStatus) console.error(error.status, error.data?.detail);
+}
+```
+
+## Option defaults
+
+`io.defaults(bag)` or `io.defaults(match, bag)` registers scoped option defaults — the lowest merge
+layer, applied in `assemble` before the endpoint descriptor and per-call options, so defaults shape
+both the wire and the cache key. Matching bags accumulate in registration order (later wins); a bag
+never carries `url`. Omit `match` for instance-global defaults. `io.run` stays raw.
+
+```js
+io.defaults(/^https:\/\/api\.example\.com/, {timeout: 5000, listSeparator: ','});
+```
+
+`io.optionDefaults` is the registered list.
+
+## Extension points
+
+- `io.registerTransport(name, transport)`, `io.transports`, `io.defaultTransport`. A `Transport` is `(request: PreparedRequest, ctx: RequestContext) => Promise<Response>`.
+- `io.inspect.request(fn, match?)` / `io.inspect.response(fn, match?)` — URL-scoped; `InspectorMatch` is `string | RegExp | ((url: string) => boolean)`. A request inspector may return a replacement `PreparedRequest`; a response inspector may return a replacement `Envelope`.
+- `io.registerData(processor)` — a `DataProcessor` is `{match(data, options), encode(data, headers, options)}`.
+- `io.registerMime(processor)` — a `MimeProcessor` is `{match(contentType, response), decode(response, options)}`; it runs on success and error bodies alike.
+- `io.attach(service)` / `io.detach(name)` — a `Service` is `{name, priority, handle(request, ctx, next)}`.
+- `io.mimeTypes` — the extension-to-MIME map.
+- Events via `io.on(event, fn)` / `off` / `emit`: `request`, `success`, `failure`, `retry`, `ready`, `sw`.
+
+## Optional modules
+
+### double-meh/encoders/zlib.js
+
+`installZlibEncoders(io)` registers br/zstd (via `node:zlib`) into `io.encoders`; kept out of browser
+bundles. Also exports `gzipEncoder`, `deflateEncoder`, `brotliEncoder`, `zstdEncoder`.
+`CompressionEncoder` is `(source: ReadableStream<Uint8Array>, options) => ReadableStream<Uint8Array> | Promise<...>`.
+
+### double-meh/sw.js
+
+Page half of the Service Worker contract, pairing with the `double-meh-sw` sibling. Exports
+`installSW`, `installChannel`, `SHARED_CACHE`, `CHANNEL`.
+
+- `io.sw` (after `installSW`) — `{library, supported, connected, contract, version, capabilities, hello()}`. The `io:hello` handshake is client-wins: a page running the library keeps ownership of its own bundling.
+- `io.channel` (after `installChannel`) — `{name, active, close()}`. Cross-tab cache invalidation over a `BroadcastChannel`; wraps `io.cache.remove` so evictions fan out, and `close()` restores it.
+
+### Code-forward
+
+`installCodeForward(io)` (already applied to the default instance) adopts requests fired by a
+`__doubleMeh` prelude in the page `<head>` — network work starts before the library finishes
+loading, and the library picks those responses up rather than refetching.
 
 ## Common patterns
 
-<!-- TODO: Add common usage patterns as the library develops -->
+```js
+// Conditional update: the whole read -> apply -> conditional PUT loop, 412 -> re-read -> retry
+await io.update(url, person => ({...person, email}));
+
+// Effectively-once POST
+await io.post(url, order, {idempotencyKey: true, retry: true});
+
+// Polling until a condition holds
+await io.get(url, null, {retry: {continueRetries: response => response.status === 202}});
+
+// Per-host configuration without touching call sites
+io.defaults(/^https:\/\/api\.example\.com/, {timeout: 5000, accept: 'application/json'});
+
+// Isolated instance for a second API
+const other = io.create();
+other.cache.storage = await sqliteStorage({name: 'other'});
+
+// Prefetch now, consume later — 'wait' registers interest without firing
+io.get(url); // fires
+const data = await io.get(url, null, {track: 'wait'}); // joins the in-flight run
+
+// Pattern invalidation
+await io.cache.remove(/\/people\//);
+```
 
 ## Links
 

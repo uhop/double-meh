@@ -252,7 +252,7 @@ export const installBundle = io => {
   };
 
   const submit = (requests, opts) => {
-    const name = (opts && opts.id) || ' submit-' + ++counter;
+    const name = (opts && opts.id) || '\tsubmit-' + ++counter;
     const promises = requests.map(target =>
       io(typeof target === 'string' ? {url: target, bundle: name} : {...target, bundle: name})
     );
