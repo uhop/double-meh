@@ -81,12 +81,12 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
-    "nano-benchmark": "^1.1.0",
-    "prettier": "^3.9.4",
-    "tape-six": "^1.13.0",
-    "tape-six-playwright": "^1.2.0",
-    "typescript": "^6.0.3",
+    "@types/node": "^26.1.2",
+    "nano-benchmark": "^1.2.0",
+    "prettier": "^3.9.6",
+    "tape-six": "^1.16.2",
+    "tape-six-playwright": "^1.2.2",
+    "typescript": "^7.0.2",
     "wiki-search-index": "^0.2.0"
   }
 }

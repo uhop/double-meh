@@ -960,8 +960,9 @@ ESM throughout; zero runtime dependencies; Prettier (100 width, single quotes, n
 trailing commas, arrow-parens avoid); `tape-six` across node/bun/deno + TS typing tests; naked version
 tags (no `v` prefix); BSD-3-Clause. **ESM-only, decided:** no CJS build — `require(esm)` covers CJS
 consumers (Node ≥ 20.19 / ≥ 22.12 on the consumer side), backed by the standing invariant that the
-module graph carries **no top-level await** (a sync `require` path must stay sync; enforced by
-`tests/cli/test-no-tla.mjs`). **`engines.node >= 20.3` is the code floor, not the support floor**
+module graph carries **no top-level await** (a sync `require` path must stay sync). Both are pinned by
+`tests/cli/test-cjs.cjs`, which requires the entry and every opt-in subpath module from CJS — a
+top-level await anywhere in the graph surfaces there as `ERR_REQUIRE_ASYNC_MODULE`. **`engines.node >= 20.3` is the code floor, not the support floor**
 (decided 2026-07-04): it names the newest API the default graph actually uses — `AbortSignal.any`,
 Node 20.3 — everything else is ≤ 18 (fetch/streams globals). Older Node runs best-effort; CI tests
 only non-EOL versions per the fleet matrix. Opt-in modules carry their own feature detection

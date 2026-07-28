@@ -18,7 +18,7 @@ const sleep = (ms, signal) => {
     };
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort);
-      resolve();
+      resolve(undefined);
     }, ms);
     signal.addEventListener('abort', onAbort, {once: true});
   });
