@@ -118,6 +118,45 @@ test('sse: an abort stops the subscription', async t => {
   await reset();
 });
 
+// counts connections inside a window: one fits at the 3000ms default, dozens at a zeroed delay
+const connectionsIn = async (ms, body) => {
+  await reset();
+  let calls = 0;
+  serve(() => {
+    ++calls;
+    return sseBody(body);
+  });
+  const controller = new AbortController();
+  const stop = setTimeout(() => controller.abort(), ms);
+  try {
+    for await (const event of io.sse('https://example.com/retry', null, {
+      signal: controller.signal
+    })) {
+      void event;
+    }
+  } catch {
+    // the abort ends the subscription
+  }
+  clearTimeout(stop);
+  return calls;
+};
+
+test('sse: a retry value that is not ASCII digits leaves the delay alone', async t => {
+  t.ok((await connectionsIn(120, 'retry:\n\n')) <= 2, 'an empty retry: does not zero the delay');
+  t.ok((await connectionsIn(120, 'retry: \n\n')) <= 2, 'nor does a blank one');
+  t.ok((await connectionsIn(120, 'retry: 0x10\n\n')) <= 2, 'nor a non-decimal one');
+  await reset();
+});
+
+test('sse: a digits retry is honoured, and clamped to the timer ceiling', async t => {
+  t.ok((await connectionsIn(120, 'retry: 20\n\n')) >= 3, 'a valid retry shortens the delay');
+  t.ok(
+    (await connectionsIn(120, 'retry: 999999999999999999999\n\n')) <= 2,
+    'a value past setTimeout’s range is clamped, not overflowed to fire immediately'
+  );
+  await reset();
+});
+
 test('sse: breaking out stops without reconnecting', async t => {
   let calls = 0;
   serve(() => {

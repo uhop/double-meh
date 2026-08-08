@@ -2,6 +2,8 @@
 import {isAbort, FailedIO} from './envelope.js';
 import {lines, parsedBadStatus} from './records.js';
 
+const MAX_RETRY = 2 ** 31 - 1; // setTimeout's ceiling
+
 const sleep = (ms, signal) => {
   if (!signal) return new Promise(resolve => setTimeout(resolve, ms));
   return new Promise((resolve, reject) => {
@@ -100,8 +102,10 @@ export const installSse = io => {
               else if (field === 'id') {
                 if (!value.includes('\0')) lastEventId = value;
               } else if (field === 'retry') {
-                const ms = Number(value);
-                if (Number.isInteger(ms) && ms >= 0) delay = ms;
+                // only ASCII digits, per the spec: Number('') is 0, which would zero the
+                // reconnect delay. Clamped because a larger value overflows setTimeout's
+                // 32-bit range and fires immediately — the same storm by another route
+                if (/^\d+$/.test(value)) delay = Math.min(Number(value), MAX_RETRY);
               }
             }
           } catch (error) {
