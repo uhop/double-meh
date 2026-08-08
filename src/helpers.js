@@ -6,7 +6,7 @@ const normalizeTarget = target =>
   typeof target === 'string' || target instanceof URL ? {url: String(target)} : target;
 
 const plainObject = value =>
-  value != null &&
+  value &&
   typeof value === 'object' &&
   !Array.isArray(value) &&
   !(typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams)
@@ -93,18 +93,18 @@ export const installHelpers = io => {
           if (limit != null) query.limit = limit;
           return io.full.get(base, null, {...follow, query});
         };
-        if (page && page.links != null && typeof page.links === 'object') {
+        if (page?.links && typeof page.links === 'object') {
           // links present in the body: their absence is the last-page signal
           if (page.links.next == null) return;
           env = await followUrl(page.links.next);
-        } else if (page && page.cursor !== undefined) {
+        } else if (page?.cursor !== undefined) {
           if (page.cursor == null) return; // a null cursor is the last page
           if (page.cursor === lastCursor) {
             throw new io.FailedIO('io.paginate: the cursor repeats a page', env.response, options);
           }
           lastCursor = page.cursor;
           env = await followQuery({...originalQuery, cursor: page.cursor});
-        } else if (page && typeof page.offset === 'number') {
+        } else if (typeof page?.offset === 'number') {
           if (!items.length) return; // no total, no links: an empty page is the end
           const offset = page.offset + items.length;
           if (typeof page.total === 'number' && offset >= page.total) return;

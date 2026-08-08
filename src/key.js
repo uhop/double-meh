@@ -23,7 +23,7 @@ const buildQuery = options => {
   let raw = '';
   if (typeof URLSearchParams !== 'undefined' && dict instanceof URLSearchParams) {
     for (const [key, value] of dict) params.append(key, value);
-  } else if (dict != null && typeof dict === 'object') {
+  } else if (dict && typeof dict === 'object') {
     for (const [key, value] of Object.entries(dict)) {
       if (Array.isArray(value)) appendList(params, key, value, bagSeparator);
       else if (value != null) params.append(key, String(value));
