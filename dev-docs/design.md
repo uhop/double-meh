@@ -656,6 +656,54 @@ monkeypatching of `processOptions`/`processSuccess`/`processFailure`.
 The `ifMatch`/`idempotencyKey`/`as` options are sugar the inspector layer applies; raw `headers`/`query`
 remain the escape hatch.
 
+## Endpoint adapters — one client contract, many vendor shapes
+
+_(recorded 2026-08-08; the pattern predates the library — `heya/io` in a client app driving the
+components of `uhop/web-components-sampler`, 2023.)_
+
+A component that owns its own I/O (a table, a form) is only reusable if it can assume **one**
+response envelope. The article's refined shape — `data`, `offset`, `limit`, optional `total`, and a
+`links` object with `prev`/`next` — is that assumption, and real endpoints routinely violate it.
+Something has to absorb the difference; _where it sits_ is the entire design.
+
+- **Rejected — the adapter on the component.** `web-components-sampler`'s `reno-table-view` shipped
+  `sanitizeRequest`/`sanitizeResponse` as identity methods for subclasses to override. That keys the
+  adapter to the _component_, so a second component hitting the same non-conforming endpoint
+  re-implements the same normalization, and nothing else in the pipeline ever sees the canonical
+  shape. (Neither stub was overridden anywhere in that repo — its demo mocks the endpoint — so the
+  seam shipped unexercised, and the real adaptation lived in the consuming app.)
+- **Rejected — a configurable I/O component.** Configuration is a _language_: it must anticipate
+  every transformation, and the one it failed to anticipate is a fork. A hook is a function, so the
+  long tail costs nothing. What config would have bought — serializable, diffable,
+  non-programmer-editable adaptation — is not a requirement here, so it is pure cost.
+- **Adopted — the adapter on the endpoint**, as URL-scoped inspectors. `inspect.request(fn, match)` /
+  `inspect.response(fn, match)` key the adapter to _what is answering_ rather than _who is asking_,
+  which is the right axis: the weirdness belongs to the endpoint. One adapter then serves every
+  consumer, and the component carries no knowledge of the vendor at all.
+
+**Pipeline placement is asymmetric, and the asymmetry is load-bearing.** Request inspectors run
+_before_ request identity is computed (`src/io.js`: `prepare` → inspectors → `ctx.key =
+requestKey(method, url, accept)`), so rewriting the URL or `Accept` canonicalizes the **cache and
+dedup key** as well — two vendor spellings of one resource collapse onto a single entry. Response
+inspectors run in `finalize`, _after_ the services onion, so the cache stores the **wire** body and
+normalization re-runs on every delivery, cache hits included. **That is deliberate, not a gap: the
+cache is a _wire_ cache** _(ruled 2026-08-08)_. It holds what the server actually sent, which is what
+keeps `ETag`/304 revalidation and `Vary` selection coherent — a reshaped entry corresponds to no HTTP
+representation the server could revalidate. It also keeps the adapter swappable: editing a transform
+leaves every cached entry valid, whereas a cache of transformed bodies would serve the old shape until
+eviction, silently coupling cache contents to adapter code. The re-run is a field reshuffle, free next
+to the request it saved. So the response-side win is singularity and scope — one implementation
+instead of one per consumer — and canonical caching is not wanted rather than merely unbuilt.
+
+**The library already absorbs the common cases**, so adapters are the tail rather than the norm:
+`io.paginate` natively accepts four envelope shapes, `registerMime`/`registerData` take over whole
+content types, and `BadStatus.problem` sniffs mislabelled error envelopes. Corollary, from the
+2026-08-08 paging ruling: when a non-conforming server meets a built-in matcher, **normalize at the
+seam rather than loosening the matcher** — a forgiving dispatch degrades behavior for conforming
+servers, while an adapter costs one function and leaves the core contract sharp.
+
+Non-goal: double-meh ships the seam, never the components.
+
 ## Events
 
 A first-class, lightweight lifecycle emitter built into the core (`io.on/off/emit`). Wired events:
