@@ -124,6 +124,7 @@ feature parity map is in the wiki:
 
 ## Release history
 
+- 1.1.0 _Streamed bundles: `io.bundle.streaming` resolves each waiter as its part arrives._
 - 1.0.0 _The initial release._
 
 See the [release notes](https://github.com/uhop/double-meh/wiki/Release-notes) for the long-form

@@ -45,9 +45,11 @@ double-meh/
 │   ├── key.js            # URL building + canonical request identity
 │   ├── helpers.js        # io.update(), io.paginate(), io.getByIds()
 │   ├── encoders.js       # compress option: gzip/deflate; encoders/ holds opt-in br/zstd (node:zlib)
+│   ├── records.js        # io.records (JSONL / json-seq) + the shared lines() splitter
+│   ├── sse.js            # Reconnecting SSE client (io.sse), built on records.js
 │   ├── code-forward.js   # __doubleMeh prelude protocol
 │   ├── sw.js             # Opt-in page half of the SW contract (io:hello, 'sw' transport, invalidation channel)
-│   ├── services/         # track, cache, retry, mock
+│   ├── services/         # track, cache, retry, mock, bundle
 │   ├── storage/          # cache backends: memory (default), fs, sqlite, cache-api
 │   └── transports/       # fetch
 ├── tests/                # Universal test files; cli/ = runtime-only, web/ = browser-only, server/ = wire fixtures
@@ -72,6 +74,12 @@ double-meh/
 - **Zero runtime dependencies.** Never add packages to `dependencies`. Only `devDependencies` are allowed.
 - **Do not modify or delete test expectations** without understanding why they changed.
 - **Keep `.js` and `.d.ts` files in sync** for all modules under `src/`.
+- **Match bundle content types by essence, never `startsWith`** — `…bundle+json` is a string prefix
+  of `…bundle+jsonl`, so a prefix test accepts a streamed body as a buffered one. Both repos carry a
+  regression test.
+- **Bundle wire-format fidelity**: part shapes and framing are a two-repo contract with
+  `double-meh-bundler` (`src/index.js` there) and `dev-docs/design.md`; the format is versioned
+  (`v`), and a framing-only change keeps `v` and discriminates by content type.
 
 <!-- TODO: Add project-specific critical rules as the codebase develops -->
 

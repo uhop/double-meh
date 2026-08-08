@@ -17,6 +17,9 @@ src/                      # Source code (plain ESM, no build step; published as-
 ├── encoders.js           # io.encoders registry + compress option (gzip/deflate via CompressionStream)
 ├── encoders/
 │   └── zlib.js           # Opt-in br/zstd via node:zlib (kept out of browser bundles)
+├── records.js            # Parsed record iteration (JSONL / json-seq): io.records + the shared
+│                         #   lines() line splitter and parsedBadStatus() stream-error path
+├── sse.js                # Reconnecting SSE client (io.sse) on top of records.js
 ├── code-forward.js       # __doubleMeh prelude protocol (early network hoisting)
 ├── sw.js                 # Opt-in page half of the SW contract: io:hello handshake, the 'sw' message
 │                         #   transport, and the cross-tab invalidation channel (BroadcastChannel 'io')
@@ -25,7 +28,8 @@ src/                      # Source code (plain ESM, no build step; published as-
 │   ├── cache.js          # App-governed cache (on by default for GETs, TTL, 304 revalidation)
 │   ├── retry.js          # Verb-safety-aware retry (+ polling via continueRetries)
 │   ├── mock.js           # Serverless mocking; composes with the real pipeline
-│   └── bundle.js         # Batches GETs into one PUT to a bundler; unbundles by MIME from any endpoint
+│   └── bundle.js         # Batches GETs into one PUT to a bundler (buffered or streamed +jsonl);
+│                         #   unbundles the buffered form by MIME from any endpoint
 ├── storage/              # Swappable cache backends (get/set/delete/clear/keys)
 │   ├── memory.js         # Map-backed default (per instance, no persistence)
 │   ├── fs.js             # One file per entry in the OS cache dir; atomic temp+rename writes
@@ -68,9 +72,11 @@ src/index.js
 ├── src/services/cache.js   → src/key.js, src/storage/memory.js
 ├── src/services/retry.js   → src/envelope.js
 ├── src/services/mock.js    → src/key.js
-├── src/services/bundle.js
+├── src/services/bundle.js  → src/records.js
 ├── src/helpers.js
 ├── src/encoders.js
+├── src/records.js          → src/envelope.js
+├── src/sse.js              → src/records.js, src/envelope.js
 └── src/code-forward.js
 
 src/storage/fs.js           → src/storage/cache-dir.js   (opt-in import)
