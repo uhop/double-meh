@@ -83,7 +83,7 @@ src/storage/fs.js           → src/storage/cache-dir.js   (opt-in import)
 src/storage/sqlite.js       → src/storage/cache-dir.js   (opt-in import)
 src/storage/cache-api.js                                 (opt-in import)
 src/encoders/zlib.js                                     (opt-in import)
-src/sw.js                                                (opt-in import)
+src/sw.js                   → src/key.js                  (opt-in import)
 ```
 
 ## Testing
