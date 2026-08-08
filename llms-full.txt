@@ -241,11 +241,22 @@ really gets retried. `MockMatcher` is `string | RegExp | ((request, ctx) => bool
 
 Batches GETs into one request to a bundler endpoint and unbundles by MIME.
 
-`{url, waitTime, maxSize, minSize, maxWait, writeThrough, theDefault, isActive, optIn(options), register(config), flush(name?), submit(requests, opts?), fly(targets)}`
+`{url, waitTime, maxSize, minSize, maxWait, streaming, writeThrough, theDefault, isActive, optIn(options), register(config), flush(name?), submit(requests, opts?), fly(targets)}`
 
-`BundlerConfig` is `{url, match?, waitTime?, maxSize?, minSize?, maxWait?}`. `writeThrough` also
-writes unpacked parts into the Cache API — a cache name, or `true` for the shared SW tier.
-`double-meh/services/bundle.js` also exports `REQUEST_MIME` and `BUNDLE_MIME`.
+`BundlerConfig` is `{url, match?, waitTime?, maxSize?, minSize?, maxWait?, streaming?}`.
+`writeThrough` also writes unpacked parts into the Cache API — a cache name, or `true` for the
+shared SW tier. `double-meh/services/bundle.js` also exports `REQUEST_MIME`, `BUNDLE_MIME`, and
+`BUNDLE_JSONL_MIME`.
+
+`streaming` (default false) offers the bundler `application/vnd.double-meh.bundle+jsonl` alongside
+the buffered type and, when it is answered, resolves each waiter as its part arrives instead of
+after the whole envelope — the stream is a `{"v":1}` header line followed by one part per line, in
+completion order. Part shapes, caching, `writeThrough`, synthetic-part errors and `BadStatus`
+mapping are unchanged; a bundler that answers buffered `+json` is handled transparently. It is off
+by default because the server must flush its compressor per part for anything to arrive early,
+which costs +25% bytes at 10 parts and +57% at 50 — compression locality being the win bundling
+exists for. Match these content types by essence, never `startsWith`: `BUNDLE_MIME` is a string
+prefix of `BUNDLE_JSONL_MIME`.
 
 ## Errors
 

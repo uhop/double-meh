@@ -151,3 +151,30 @@ test('wire: a bundle round-trips through the reference bundler fixture', async t
     t.equal(after.etag, 1, 'no extra wire hit for the cached part');
   });
 });
+
+test('wire: a streamed bundle resolves each waiter as its part crosses the wire', async t => {
+  await withTestServer(OPTIONS, async base => {
+    const io = create();
+    io.bundle.url = base + '/--io/bundle?scope=w-stream';
+    io.bundle.streaming = true;
+    const order = [];
+    const slow = io
+      .get(base + '/--io/delay?scope=w-stream&ms=250', null, {bundle: true})
+      .then(data => (order.push('slow'), data));
+    const fast = io
+      .get(base + '/--io/etag?scope=w-stream', null, {bundle: true})
+      .then(data => (order.push('fast'), data));
+    // buffered framing would settle both together, in request order
+    const etagged = await fast;
+    t.deepEqual(order, ['fast'], 'the fast part resolved while the slow one was still upstream');
+    t.equal(etagged.version, 1, 'and decoded');
+    t.deepEqual(await slow, {delayed: 250}, 'the slow part followed');
+    t.deepEqual(order, ['fast', 'slow'], 'completion order, not request order');
+    const counters = await io.get(base + '/--io/counters?scope=w-stream', null, {cache: false});
+    t.equal(counters.bundle, 1, 'one bundle request hit the server');
+    const again = await io.get(base + '/--io/etag?scope=w-stream');
+    t.equal(again.version, 1, 'streamed parts land in the per-URL cache like buffered ones');
+    const settled = await io.get(base + '/--io/counters?scope=w-stream', null, {cache: false});
+    t.equal(settled.etag, 1, 'served from cache, no extra wire hit');
+  });
+});

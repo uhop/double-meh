@@ -2,6 +2,7 @@ import type {IO, Bundle} from '../types.js';
 
 export declare const REQUEST_MIME: string;
 export declare const BUNDLE_MIME: string;
+export declare const BUNDLE_JSONL_MIME: string;
 
 /**
  * Installs the bundle service: batches eligible GETs into one PUT to a bundler endpoint

@@ -1,7 +1,12 @@
 // @ts-self-types="./bundle.d.ts"
+import {lines, parsedBadStatus} from '../records.js';
 
 export const REQUEST_MIME = 'application/vnd.double-meh.bundle-request+json';
 export const BUNDLE_MIME = 'application/vnd.double-meh.bundle+json';
+export const BUNDLE_JSONL_MIME = 'application/vnd.double-meh.bundle+jsonl';
+
+// BUNDLE_MIME is a string prefix of BUNDLE_JSONL_MIME, so a startsWith test would confuse the two
+const essence = type => type.split(';')[0].trim();
 
 // the whitelist that rides per part: identity + conditionals; auth/cookies stay on the outer request
 const PART_HEADERS = ['accept', 'accept-language', 'if-none-match', 'if-modified-since'];
@@ -44,7 +49,8 @@ export const installBundle = io => {
     waitTime: bundler.waitTime ?? io.bundle.waitTime,
     maxSize: bundler.maxSize ?? io.bundle.maxSize,
     minSize: bundler.minSize ?? io.bundle.minSize,
-    maxWait: bundler.maxWait ?? io.bundle.maxWait
+    maxWait: bundler.maxWait ?? io.bundle.maxWait,
+    streaming: bundler.streaming ?? io.bundle.streaming
   });
 
   const selectBundler = url => {
@@ -82,8 +88,8 @@ export const installBundle = io => {
     fn(value);
   };
 
-  const sendChunk = async (cfg, waiters) => {
-    const parts = waiters.map(waiter => {
+  const buildParts = waiters =>
+    waiters.map(waiter => {
       const headers = {};
       for (const name of PART_HEADERS) {
         const value = waiter.request.headers.get(name);
@@ -91,25 +97,19 @@ export const installBundle = io => {
       }
       return {id: waiter.id, url: waiter.request.url, method: 'GET', headers};
     });
-    try {
-      await io.put(
-        cfg.url,
-        {v: 1, parts},
-        {bundle: false, cache: false, accept: BUNDLE_MIME, headers: {'Content-Type': REQUEST_MIME}}
+
+  // already-settled waiters are left alone, so a mid-stream failure keeps the parts that landed
+  const failAll = (waiters, error) => {
+    for (const waiter of waiters) {
+      settle(
+        waiter,
+        waiter.reject,
+        new io.FailedIO('io: bundle request failed', undefined, waiter.ctx.options, {cause: error})
       );
-    } catch (error) {
-      for (const waiter of waiters) {
-        settle(
-          waiter,
-          waiter.reject,
-          new io.FailedIO('io: bundle request failed', undefined, waiter.ctx.options, {
-            cause: error
-          })
-        );
-      }
-      return;
     }
-    // matched ids were resolved by the unbundling inspector during the PUT's own finalize
+  };
+
+  const sweepUnclaimed = waiters => {
     for (const waiter of waiters) {
       if (!waiter.settled) {
         settle(
@@ -124,6 +124,72 @@ export const installBundle = io => {
       }
     }
   };
+
+  const sendBuffered = async (cfg, waiters) => {
+    try {
+      await io.put(
+        cfg.url,
+        {v: 1, parts: buildParts(waiters)},
+        {bundle: false, cache: false, accept: BUNDLE_MIME, headers: {'Content-Type': REQUEST_MIME}}
+      );
+    } catch (error) {
+      return void failAll(waiters, error);
+    }
+    // matched ids were resolved by the unbundling inspector during the PUT's own finalize
+    sweepUnclaimed(waiters);
+  };
+
+  const sendStreaming = async (cfg, waiters) => {
+    let envelope;
+    try {
+      envelope = await io.full.put(
+        cfg.url,
+        {v: 1, parts: buildParts(waiters)},
+        {
+          bundle: false,
+          cache: false,
+          stream: true,
+          ignoreBadStatus: true,
+          accept: BUNDLE_JSONL_MIME + ', ' + BUNDLE_MIME,
+          headers: {'Content-Type': REQUEST_MIME}
+        }
+      );
+      if (!envelope.ok) throw await parsedBadStatus(envelope, cfg.url, undefined);
+    } catch (error) {
+      return void failAll(waiters, error);
+    }
+    const body = envelope.data;
+    const streamed = body && typeof body.getReader === 'function';
+    try {
+      if (streamed && essence(envelope.contentType || '') === BUNDLE_JSONL_MIME) {
+        let header = false;
+        for await (const raw of lines(body)) {
+          const text = raw.trim();
+          if (!text) continue;
+          const record = JSON.parse(text);
+          if (!header) {
+            header = true;
+            if (record && record.v !== 1) {
+              throw new TypeError('io: unknown bundle version: ' + record.v);
+            }
+            continue;
+          }
+          // the payoff: each part resolves its waiter now, not after the last upstream lands
+          applyPart(record);
+        }
+      } else {
+        // the bundler declined the jsonl offer — read the buffered envelope off the stream
+        const doc = streamed ? await new Response(body).json() : body;
+        if (doc && Array.isArray(doc.parts)) for (const part of doc.parts) applyPart(part);
+      }
+    } catch (error) {
+      return void failAll(waiters, error);
+    }
+    sweepUnclaimed(waiters);
+  };
+
+  const sendChunk = (cfg, waiters) =>
+    cfg.streaming ? sendStreaming(cfg, waiters) : sendBuffered(cfg, waiters);
 
   const flushPool = pool => {
     removePool(pool);
@@ -204,51 +270,52 @@ export const installBundle = io => {
 
   const service = {name: 'bundle', priority: 25, handle};
 
+  const applyPart = part => {
+    const writeThrough = io.bundle.writeThrough;
+    const waiter = part.id != null ? byId.get(part.id) : undefined;
+    if (waiter) {
+      if (part.synthetic) {
+        settle(
+          waiter,
+          waiter.reject,
+          new io.FailedIO(
+            'io: the bundler failed the part: ' + (part.body || '(unspecified)'),
+            undefined,
+            waiter.ctx.options
+          )
+        );
+      } else {
+        settle(waiter, waiter.resolve, toResponse(part));
+      }
+    } else if (part.url && !part.synthetic) {
+      // an unclaimed part is a prefetch by definition: adopt-seed it for a future request
+      const target = {url: part.url};
+      if (part.accept) target.accept = part.accept;
+      io.adopt(target, toResponse(part)).catch(() => {});
+    }
+    const status = part.status || 200;
+    if (
+      writeThrough &&
+      typeof caches !== 'undefined' &&
+      part.url &&
+      !part.synthetic &&
+      status >= 200 &&
+      status < 300
+    ) {
+      caches
+        // 'io-shared' is lockstep with the double-meh-sw cache-tier default (src/sw.js SHARED_CACHE)
+        .open(writeThrough === true ? 'io-shared' : String(writeThrough))
+        .then(cache => cache.put(part.url, toResponse(part)))
+        .catch(() => {});
+    }
+  };
+
   const unbundle = envelope => {
     const response = envelope.response;
-    const type = (response && response.headers.get('content-type')) || '';
-    if (!type.startsWith(BUNDLE_MIME)) return;
+    if (essence((response && response.headers.get('content-type')) || '') !== BUNDLE_MIME) return;
     const doc = envelope.data;
     if (!doc || !Array.isArray(doc.parts)) return;
-    const writeThrough = io.bundle.writeThrough;
-    for (const part of doc.parts) {
-      const waiter = part.id != null ? byId.get(part.id) : undefined;
-      if (waiter) {
-        if (part.synthetic) {
-          settle(
-            waiter,
-            waiter.reject,
-            new io.FailedIO(
-              'io: the bundler failed the part: ' + (part.body || '(unspecified)'),
-              undefined,
-              waiter.ctx.options
-            )
-          );
-        } else {
-          settle(waiter, waiter.resolve, toResponse(part));
-        }
-      } else if (part.url && !part.synthetic) {
-        // an unclaimed part is a prefetch by definition: adopt-seed it for a future request
-        const target = {url: part.url};
-        if (part.accept) target.accept = part.accept;
-        io.adopt(target, toResponse(part)).catch(() => {});
-      }
-      const status = part.status || 200;
-      if (
-        writeThrough &&
-        typeof caches !== 'undefined' &&
-        part.url &&
-        !part.synthetic &&
-        status >= 200 &&
-        status < 300
-      ) {
-        caches
-          // 'io-shared' is lockstep with the double-meh-sw cache-tier default (src/sw.js SHARED_CACHE)
-          .open(writeThrough === true ? 'io-shared' : String(writeThrough))
-          .then(cache => cache.put(part.url, toResponse(part)))
-          .catch(() => {});
-      }
-    }
+    for (const part of doc.parts) applyPart(part);
   };
 
   const submit = (requests, opts) => {
@@ -269,6 +336,7 @@ export const installBundle = io => {
     maxSize: 20,
     minSize: 2,
     maxWait: 500,
+    streaming: false,
     writeThrough: false,
     theDefault: false,
     isActive: false,

@@ -81,7 +81,7 @@ Response-level middleware in a priority onion; each opts in per request (its own
 - `io.cache` — app-governed cache: `storage`, `defaultTtl`, `remove(pattern)`, `clear()`, `sweep()`, `save()`, `idle()`. Honors `Vary`, revalidates with 304.
 - `io.retry` — verb-safety-aware: `retries`, `initDelay`, `maxDelay`, `nextDelay()`.
 - `io.mock(matcher, callback)` — serverless mocking through the real pipeline, so a mocked 503 really gets retried.
-- `io.bundle` — batches GETs into one request to a bundler endpoint: `url`, `waitTime`, `maxSize`, `minSize`, `maxWait`, `writeThrough`, `register(config)`, `flush(name?)`, `submit(requests)`, `fly(targets)`.
+- `io.bundle` — batches GETs into one request to a bundler endpoint: `url`, `waitTime`, `maxSize`, `minSize`, `maxWait`, `streaming`, `writeThrough`, `register(config)`, `flush(name?)`, `submit(requests)`, `fly(targets)`. `streaming: true` (default false) asks for the `…bundle+jsonl` framing and resolves each waiter as its part arrives, in completion order; it costs server-side compression, so it is opt-in.
 
 ## Errors
 

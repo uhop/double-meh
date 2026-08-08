@@ -1,7 +1,7 @@
 import test from 'tape-six';
 
 import {io, json, serve, reset} from './helper.js';
-import {BUNDLE_MIME} from '../src/services/bundle.js';
+import {BUNDLE_MIME, BUNDLE_JSONL_MIME} from '../src/services/bundle.js';
 import {SHARED_CACHE} from '../src/sw.js';
 
 const BASE = 'https://example.com';
@@ -417,3 +417,214 @@ test(
     await caches.delete(SHARED_CACHE).catch(() => {});
   }
 );
+
+// a bundler that answers the PUT with a jsonl stream the test drives line by line
+const streamingBundler = (counters, script) => request => {
+  if (request.method === 'PUT' && new URL(request.url).pathname === '/bundle') {
+    ++counters.puts;
+    counters.lastAccept = request.headers.get('accept');
+    counters.lastDoc = JSON.parse(request.body);
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        counters.write = record =>
+          controller.enqueue(encoder.encode(JSON.stringify(record) + '\n'));
+        counters.close = () => controller.close();
+        script(counters);
+      }
+    });
+    return new Response(stream, {headers: {'content-type': BUNDLE_JSONL_MIME}});
+  }
+  ++counters.gets;
+  return json(DATA[new URL(request.url).pathname] ?? {miss: true});
+};
+
+const withStreamingBundler = async (run, script) => {
+  const counters = {puts: 0, gets: 0, lastDoc: null, lastAccept: null};
+  // reset() fires io.cache.clear() without awaiting it; the browser backend is async, so an
+  // earlier test's cached /a and /b can survive into this one and never enter a bundle window
+  await io.cache.clear();
+  serve(streamingBundler(counters, script));
+  io.bundle.url = BASE + '/bundle';
+  io.bundle.streaming = true;
+  try {
+    await run(counters);
+  } finally {
+    io.bundle.streaming = false;
+    io.bundle.url = '';
+    reset();
+  }
+};
+
+test('bundle streaming: the send negotiates jsonl and parts resolve', async t => {
+  await withStreamingBundler(
+    async counters => {
+      const [a, b] = await Promise.all([
+        io.get(BASE + '/a', null, {bundle: true}),
+        io.get(BASE + '/b', null, {bundle: true})
+      ]);
+      t.equal(counters.puts, 1, 'one bundle PUT');
+      t.equal(counters.gets, 0, 'no individual GETs');
+      t.ok(counters.lastAccept.startsWith(BUNDLE_JSONL_MIME), 'jsonl offered first');
+      t.ok(counters.lastAccept.includes(BUNDLE_MIME), 'buffered json still offered as a fallback');
+      t.deepEqual(a, DATA['/a'], 'first part decoded');
+      t.deepEqual(b, DATA['/b'], 'second part decoded');
+    },
+    counters => {
+      counters.write({v: 1});
+      for (const part of counters.lastDoc.parts) counters.write(partFor(part));
+      counters.close();
+    }
+  );
+});
+
+test('bundle streaming: a waiter resolves before the rest of the stream arrives', async t => {
+  let releaseSecond;
+  const gate = new Promise(resolve => (releaseSecond = resolve));
+  await withStreamingBundler(
+    async counters => {
+      const first = io.get(BASE + '/a', null, {bundle: true});
+      const second = io.get(BASE + '/b', null, {bundle: true});
+      // would never settle if the client waited for the whole envelope
+      t.deepEqual(
+        await first,
+        DATA['/a'],
+        'the first part resolved while the stream was still open'
+      );
+      releaseSecond();
+      t.deepEqual(await second, DATA['/b'], 'the second followed');
+      t.equal(counters.puts, 1, 'still one PUT');
+    },
+    counters => {
+      const [one, two] = counters.lastDoc.parts;
+      counters.write({v: 1});
+      counters.write(partFor(one));
+      gate.then(() => {
+        counters.write(partFor(two));
+        counters.close();
+      });
+    }
+  );
+});
+
+test('bundle streaming: a synthetic part rejects only its own waiter', async t => {
+  await withStreamingBundler(
+    async counters => {
+      const results = await Promise.allSettled([
+        io.get(BASE + '/a', null, {bundle: true}),
+        io.get(BASE + '/b', null, {bundle: true})
+      ]);
+      t.equal(results[0].status, 'fulfilled', 'the healthy part resolved');
+      t.deepEqual(results[0].value, DATA['/a'], 'with its body');
+      t.equal(results[1].status, 'rejected', 'the synthetic part rejected');
+      t.ok(results[1].reason instanceof io.FailedIO, 'as FailedIO');
+      t.ok(/upstream exploded/.test(results[1].reason.message), 'carrying the bundler message');
+    },
+    counters => {
+      const [one, two] = counters.lastDoc.parts;
+      counters.write({v: 1});
+      counters.write(partFor(one));
+      counters.write({
+        id: two.id,
+        url: two.url,
+        status: 502,
+        synthetic: true,
+        headers: {'content-type': 'text/plain'},
+        body: 'upstream exploded'
+      });
+      counters.close();
+    }
+  );
+});
+
+test('bundle streaming: a part the stream never carries fails its waiter', async t => {
+  await withStreamingBundler(
+    async counters => {
+      const results = await Promise.allSettled([
+        io.get(BASE + '/a', null, {bundle: true}),
+        io.get(BASE + '/b', null, {bundle: true})
+      ]);
+      t.equal(results[0].status, 'fulfilled', 'the delivered part resolved');
+      t.equal(results[1].status, 'rejected', 'the omitted one rejected');
+      t.ok(/part missing/.test(results[1].reason.message), 'as a missing part');
+    },
+    counters => {
+      counters.write({v: 1});
+      counters.write(partFor(counters.lastDoc.parts[0]));
+      counters.close();
+    }
+  );
+});
+
+test('bundle streaming: a bundler that answers buffered json still works', async t => {
+  const counters = {puts: 0, gets: 0, lastAccept: null};
+  serve(request => {
+    if (request.method === 'PUT' && new URL(request.url).pathname === '/bundle') {
+      ++counters.puts;
+      counters.lastAccept = request.headers.get('accept');
+      return bundleResponse(JSON.parse(request.body).parts.map(partFor));
+    }
+    ++counters.gets;
+    return json(DATA[new URL(request.url).pathname] ?? {miss: true});
+  });
+  io.bundle.url = BASE + '/bundle';
+  io.bundle.streaming = true;
+  try {
+    const [a, b] = await Promise.all([
+      io.get(BASE + '/a', null, {bundle: true}),
+      io.get(BASE + '/b', null, {bundle: true})
+    ]);
+    t.ok(counters.lastAccept.includes(BUNDLE_JSONL_MIME), 'jsonl was offered');
+    t.equal(counters.puts, 1, 'one PUT');
+    t.equal(counters.gets, 0, 'no fallback GETs');
+    t.deepEqual([a, b], [DATA['/a'], DATA['/b']], 'both parts decoded off the buffered envelope');
+  } finally {
+    io.bundle.streaming = false;
+    io.bundle.url = '';
+    reset();
+  }
+});
+
+test('bundle streaming: off by default — the send asks only for buffered json', async t => {
+  await withBundler(t, async counters => {
+    let accept;
+    serve(request => {
+      if (request.method === 'PUT' && new URL(request.url).pathname === '/bundle') {
+        accept = request.headers.get('accept');
+        return bundleResponse(JSON.parse(request.body).parts.map(partFor));
+      }
+      ++counters.gets;
+      return json(DATA[new URL(request.url).pathname] ?? {miss: true});
+    });
+    await Promise.all([
+      io.get(BASE + '/a', null, {bundle: true}),
+      io.get(BASE + '/b', null, {bundle: true})
+    ]);
+    t.equal(accept, BUNDLE_MIME, 'no jsonl offered when streaming is off');
+  });
+});
+
+test('bundle streaming: the buffered inspector ignores a jsonl content type', async t => {
+  // BUNDLE_MIME is a string prefix of BUNDLE_JSONL_MIME — a startsWith test would unpack this
+  await withBundler(t, async counters => {
+    serve(request => {
+      if (request.method === 'PUT' && new URL(request.url).pathname === '/bundle') {
+        const parts = JSON.parse(request.body).parts.map(partFor);
+        return new Response(JSON.stringify({v: 1, parts}), {
+          headers: {'content-type': BUNDLE_JSONL_MIME}
+        });
+      }
+      ++counters.gets;
+      return json(DATA[new URL(request.url).pathname] ?? {miss: true});
+    });
+    const results = await Promise.allSettled([
+      io.get(BASE + '/a', null, {bundle: true}),
+      io.get(BASE + '/b', null, {bundle: true})
+    ]);
+    t.deepEqual(
+      results.map(r => r.status),
+      ['rejected', 'rejected'],
+      'a jsonl-typed body is not unpacked by the buffered path'
+    );
+  });
+});

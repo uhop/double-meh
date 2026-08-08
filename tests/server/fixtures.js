@@ -4,6 +4,10 @@
 
 const SCOPE_TTL = 5 * 60 * 1000;
 
+// spelled out rather than imported: the fixtures plugin is loaded by the test server, not by src
+const BUNDLE_MIME = 'application/vnd.double-meh.bundle+json';
+const BUNDLE_JSONL_MIME = 'application/vnd.double-meh.bundle+jsonl';
+
 const json = (data, init = {}) =>
   new Response(JSON.stringify(data), {
     status: init.status || 200,
@@ -123,8 +127,7 @@ export default async function fixtures() {
     bundle: async request => {
       const doc = request.body ? await request.json() : null;
       if (!doc || !Array.isArray(doc.parts)) return json({error: 'wrong payload'}, {status: 400});
-      const parts = [];
-      for (const part of doc.parts) {
+      const runPart = async part => {
         const sub = new Request(new URL(part.url, request.url), {headers: part.headers || {}});
         let response;
         try {
@@ -132,15 +135,14 @@ export default async function fixtures() {
           // generator-sugar routes (jsonl) stream — by design not bundlable
           if (!(response instanceof Response)) throw new Error('streaming route is not bundlable');
         } catch (error) {
-          parts.push({
+          return {
             id: part.id,
             url: part.url,
             status: 502,
             synthetic: true,
             headers: {'content-type': 'text/plain'},
             body: String((error && error.message) || error)
-          });
-          continue;
+          };
         }
         const headers = Object.fromEntries(response.headers);
         const out = {id: part.id, url: part.url, status: response.status, headers};
@@ -149,10 +151,32 @@ export default async function fixtures() {
             ? await response.json()
             : await response.text();
         }
-        parts.push(out);
+        return out;
+      };
+      const wantsStream = (request.headers.get('accept') || '')
+        .split(',')
+        .some(entry => entry.split(';')[0].trim() === BUNDLE_JSONL_MIME);
+      if (wantsStream) {
+        const encoder = new TextEncoder();
+        const body = new ReadableStream({
+          async start(controller) {
+            controller.enqueue(encoder.encode(JSON.stringify({v: 1}) + '\n'));
+            // concurrent and written on completion — the whole point of the streamed framing
+            await Promise.all(
+              doc.parts.map(async part => {
+                const out = await runPart(part);
+                controller.enqueue(encoder.encode(JSON.stringify(out) + '\n'));
+              })
+            );
+            controller.close();
+          }
+        });
+        return new Response(body, {headers: {'content-type': BUNDLE_JSONL_MIME}});
       }
+      const parts = [];
+      for (const part of doc.parts) parts.push(await runPart(part));
       return new Response(JSON.stringify({v: 1, parts}), {
-        headers: {'content-type': 'application/vnd.double-meh.bundle+json'}
+        headers: {'content-type': BUNDLE_MIME}
       });
     }
   };

@@ -348,6 +348,7 @@ export interface BundlerConfig {
   maxSize?: number;
   minSize?: number;
   maxWait?: number;
+  streaming?: boolean;
 }
 
 export interface Bundle {
@@ -361,6 +362,12 @@ export interface Bundle {
   minSize: number;
   /** Safety auto-flush for named bundles whose explicit flush never comes, ms. */
   maxWait: number;
+  /**
+   * Ask the bundler for `application/vnd.double-meh.bundle+jsonl` and resolve each waiter as its
+   * part arrives instead of after the whole envelope. Falls back transparently when the bundler
+   * answers with the buffered `+json`. Default: false.
+   */
+  streaming: boolean;
   /** Also write unpacked parts into the Cache API: a cache name, or `true` for "io-shared" (the SW shared tier). */
   writeThrough: boolean | string;
   theDefault: ServiceDefault;

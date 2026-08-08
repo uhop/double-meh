@@ -471,10 +471,49 @@ fallback for foreign endpoints that cannot set one:
 
 - request: `application/vnd.double-meh.bundle-request+json`
 - response: `application/vnd.double-meh.bundle+json`
+- response, streamed: `application/vnd.double-meh.bundle+jsonl`
 
 The `+json` suffix keeps generic tooling working; the vendor tree needs no registration in practice
-(GitHub's `vnd.github+json` precedent). Reserved for a v2: `…bundle+jsonl` — parts streamed as they
-complete server-side, consumed through the records layer.
+(GitHub's `vnd.github+json` precedent).
+
+**Streamed framing — built 2026-08-08** (originally reserved here "for a v2"). Parts are flushed as
+they complete server-side and consumed through the records layer, exactly as reserved; what the
+reservation left open was resolved as follows.
+
+**It is not a v2.** The part shapes are byte-identical to the buffered form — only the framing
+differs — so bumping `v` would falsely signal a payload change and force a version branch into
+every future client. `v` stays `1` and the **content type is the discriminator**. The stream is
+JSON Lines: **line 1 is the envelope header `{"v":1}`**, every later line is one part. The header
+is not ceremony — it is the same "an envelope, not a bare array" extensibility argument the request
+body makes below, and it keeps the stream self-describing for a consumer that never saw the
+headers.
+
+**Hazard, and it bit during implementation:** `…bundle+json` is a **string prefix** of
+`…bundle+jsonl`, so the pre-existing `type.startsWith(BUNDLE_MIME)` test in the unbundling
+inspector would have accepted a streamed body as a buffered one. Both sides now compare the
+content-type **essence** (`type.split(';')[0].trim()`), and both carry a regression test.
+
+**Ordering.** Parts arrive in completion order, not request order — legal by construction, since
+correlation has been by `id` from the start precisely to allow this. Base64 parts remain held to
+the end of the stream: the text-first locality rule outranks flushing a binary part early.
+
+**The trade is compression, and it is steep.** Streaming only delivers early if the compressor
+flushes per part, and per-part `Z_SYNC_FLUSH` costs **+25% bytes at 10 parts, +39% at 20, +57% at
+50** against one-shot gzip of the buffered envelope (measured through `node:zlib` on small-JSON
+bundles). Without the flush gzip re-buffers the stream and nothing arrives early — a streaming mode
+that silently does not stream. Since compression locality is the win that survived the h2
+benchmark, streaming is **negotiated per client, never automatic**: the bundler serves `+jsonl`
+only when `Accept` names it, and the client asks only under `io.bundle.streaming` (default
+**false** — the buffered path stays the 1.0.0 behaviour). Stream when part latencies are uneven
+enough that time-to-first-part beats bytes.
+
+Client side: `io.bundle.streaming` (or per-bundler in `register()`) switches the send to
+`io.full.put(..., {stream: true})` and iterates the body through `lines()` from the records layer,
+applying each part as it lands; a bundler that answers buffered `+json` anyway is handled
+transparently. Server side, the reference implementation is `double-meh-bundler`'s `streaming`
+option, which also refuses to stream whenever a `processBundle` transform is configured — that
+transform needs the whole envelope, and silently skipping a configured transform (it may be
+redacting) is worse than not streaming.
 
 Request body — an envelope, not a bare array (extensibility):
 
