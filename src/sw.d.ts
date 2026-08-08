@@ -55,7 +55,9 @@ export declare function installChannel(io: IO, options?: ChannelInstallOptions):
  * navigations by landing results in the SW's shared Cache API tier), announces `io:hello` when a
  * controlling SW is present (and re-announces on `controllerchange`), and maintains `io.sw`.
  * Emits the `sw` event on connect and disconnect. Request bodies do not cross the channel;
- * interactive traffic stays on the default fetch transport.
+ * interactive traffic stays on the default fetch transport. Request URLs cross **absolute**,
+ * resolved against the page — the worker's own base is its script URL, so it cannot resolve a
+ * relative one on the page's behalf.
  *
  * Response bodies are negotiated per request: any shape that sets `stream` (`io.stream.*`,
  * `io.records.*`) asks the worker to transfer a `ReadableStream`, while every other shape keeps

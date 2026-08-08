@@ -916,6 +916,18 @@ disconnect. `writeThrough: true` lands parts in `io-shared` — lockstep with th
 cache-tier default. The `serviceWorker` container is injectable, so the fake-driven suite runs on
 all runtimes and real Chromium.
 
+**Fixed 2026-08-08 (the transport's URLs go over absolute)** — `io:fetch` carried whatever
+`buildUrl` produced, and `buildUrl` returns `options.url` unchanged when there is no query, so a
+relative URL crossed the channel relative and the worker resolved it against _its own script_ — a
+different base than the page. Demonstrated in Chromium from `/deep/page.html`: `fetch('api/rel')`
+hit `/deep/api/rel` while the same URL through the transport hit `/api/rel`, silently, with a 200 —
+and adding one query param made it correct again, because that is `buildUrl`'s absolutizing branch.
+The transport now sends `absoluteUrl(request.url)` (`src/key.js` — resolution only; `canonicalUrl`
+sorts the query and drops the hash, which is right for an identity key and wrong for a URL about to
+be fetched). Only the page can do this — the worker has no way to learn the page's base. The
+`buildUrl` asymmetry itself is left alone: it feeds cache and dedup identity, and changing it would
+move every relative-URL key in the library.
+
 **Built 2026-08-08 (streamed transport bodies)** — the `io:result` body shape is negotiated per
 request rather than versioned: `io:fetch` carries `stream: true` and the worker answers with a
 transferred `ReadableStream` where the platform can transfer one (advertised as the `stream`

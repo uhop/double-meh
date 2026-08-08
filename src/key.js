@@ -3,6 +3,16 @@ const noBody = {GET: 1, HEAD: 1, OPTIONS: 1};
 
 const base = () => (typeof location !== 'undefined' && location ? location.href : undefined);
 
+// resolution only — canonicalUrl additionally sorts the query and drops the hash, which is right
+// for an identity key and wrong for a URL about to be fetched
+export const absoluteUrl = rawUrl => {
+  try {
+    return new URL(rawUrl, base()).href;
+  } catch {
+    return rawUrl;
+  }
+};
+
 const appendList = (params, key, list, separator) => {
   if (!Array.isArray(list) || !list.length) return;
   if (separator == null) for (const item of list) params.append(key, String(item));

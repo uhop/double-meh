@@ -1,7 +1,7 @@
 // @ts-self-types="./sw.d.ts"
 // page half of the SW message contract v1 — lockstep with double-meh-sw src/{contract,messages}.js
 
-import {canonicalUrl} from './key.js';
+import {canonicalUrl, absoluteUrl} from './key.js';
 
 const HELLO = 'io:hello';
 const FETCH = 'io:fetch';
@@ -67,7 +67,9 @@ export const installSW = (io, options = {}) => {
         const message = {
           type: FETCH,
           id,
-          url: request.url,
+          // the worker would resolve a relative URL against its own script, which is a different
+          // base than this page — only the page can resolve it correctly, so it goes over absolute
+          url: absoluteUrl(request.url),
           method: request.method,
           headers: [...request.headers]
         };
