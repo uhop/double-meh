@@ -1,7 +1,7 @@
 import test from 'tape-six';
 
 import {io} from './helper.js';
-import {makeWorker, makeContainer, tick} from './helper-sw.js';
+import {makeWorker, makeContainer, tick, canTransferStreams} from './helper-sw.js';
 import {installSW} from '../src/sw.js';
 
 const BASE = 'https://example.com';
@@ -35,6 +35,103 @@ test('sw: transport round-trip through the full pipeline', async t => {
   t.equal(sent.url, BASE + '/data', 'url rides along');
   t.ok(Array.isArray(sent.headers), 'headers ride as entries');
 });
+
+test('sw: a streamed shape negotiates a streamed body, a parsed one does not', async t => {
+  const dm = io.create();
+  const worker = makeWorker({
+    routes: {
+      [BASE + '/big']: {body: {streamed: true}},
+      [BASE + '/small']: {body: {parsed: true}}
+    }
+  });
+  installSW(dm, {serviceWorker: makeContainer(worker)});
+
+  const body = await dm.stream.get(BASE + '/big', null, {transport: 'sw'});
+  const asked = worker.seen.find(message => message.url === BASE + '/big');
+  t.ok(asked.stream, 'io.stream.* asks the worker for a transferred body');
+  t.ok(body instanceof ReadableStream, 'and the caller gets a stream either way');
+  t.deepEqual(await new Response(body).json(), {streamed: true}, 'which reads back intact');
+
+  await dm.get(BASE + '/small', null, {transport: 'sw'});
+  const plain = worker.seen.find(message => message.url === BASE + '/small');
+  t.equal(plain.stream, undefined, 'a parsed shape leaves the buffered default alone');
+});
+
+test('sw: a worker that cannot transfer streams answers buffered, and asking stays safe', async t => {
+  const dm = io.create();
+  const worker = makeWorker({
+    canStream: false,
+    routes: {[BASE + '/export']: {body: {buffered: true}}}
+  });
+  installSW(dm, {serviceWorker: makeContainer(worker)});
+
+  const body = await dm.stream.get(BASE + '/export', null, {transport: 'sw'});
+  const asked = worker.seen.find(message => message.url === BASE + '/export');
+  t.ok(asked.stream, 'the page asks without checking the capability first');
+  t.ok(body instanceof ReadableStream, 'the buffered reply re-mints as a stream regardless');
+  t.deepEqual(await new Response(body).json(), {buffered: true}, 'carrying the same payload');
+});
+
+test(
+  'sw: a transferred body arrives live, not re-buffered by the pipeline',
+  {skip: !canTransferStreams()},
+  async t => {
+    const dm = io.create();
+    let source;
+    const worker = makeWorker({
+      routes: {
+        [BASE + '/live']: {
+          stream: new ReadableStream({start: controller => void (source = controller)}),
+          headers: [['content-type', 'text/plain']]
+        }
+      }
+    });
+    installSW(dm, {serviceWorker: makeContainer(worker)});
+
+    const body = await dm.stream.get(BASE + '/live', null, {transport: 'sw'});
+    const reader = body.getReader();
+    // the transport closed its port in `finally` before this point: a transferred stream rides
+    // its own port pair, so the body outlives the channel that carried it
+    source.enqueue(new TextEncoder().encode('first'));
+    const chunk = await reader.read();
+    t.equal(new TextDecoder().decode(chunk.value), 'first', 'a chunk reads before the source ends');
+    source.close();
+    t.ok((await reader.read()).done, 'and the stream ends when the source does');
+  }
+);
+
+test(
+  'sw: io.records is a streamed shape too, and reads record by record',
+  {skip: !canTransferStreams()},
+  async t => {
+    const dm = io.create();
+    const encode = text => new TextEncoder().encode(text);
+    let source;
+    const worker = makeWorker({
+      routes: {
+        [BASE + '/rows']: {
+          stream: new ReadableStream({
+            start: controller => {
+              source = controller;
+              controller.enqueue(encode('{"n":1}\n'));
+            }
+          }),
+          headers: [['content-type', 'application/x-ndjson']]
+        }
+      }
+    });
+    installSW(dm, {serviceWorker: makeContainer(worker)});
+
+    const rows = dm.records.get(BASE + '/rows', null, {transport: 'sw'});
+    t.deepEqual((await rows.next()).value, {n: 1}, 'a record arrives with the source still open');
+    const asked = worker.seen.find(message => message.url === BASE + '/rows');
+    t.ok(asked.stream, 'io.records negotiated the transfer without naming io.stream');
+    source.enqueue(encode('{"n":2}\n'));
+    t.deepEqual((await rows.next()).value, {n: 2}, 'one enqueued after the transfer follows');
+    source.close();
+    t.ok((await rows.next()).done, 'and the iteration ends when the source does');
+  }
+);
 
 test('sw: transport works on uncontrolled pages', async t => {
   const dm = io.create();

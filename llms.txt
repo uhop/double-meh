@@ -33,7 +33,7 @@ subpath imports carry the `.js` extension.
 - `double-meh/services/{track,cache,retry,mock,bundle}.js` — `installTrack`, `installCache`, `installRetry`, `installMock`, `installBundle`.
 - `double-meh/storage/{memory,fs,sqlite,cache-api}.js` — cache backends: `memoryStorage`, `fsStorage`, `sqliteStorage`, `cacheApiStorage`.
 - `double-meh/encoders/zlib.js` — `installZlibEncoders` plus `gzipEncoder`, `deflateEncoder`, `brotliEncoder`, `zstdEncoder` (br/zstd via `node:zlib`, kept out of browser bundles).
-- `double-meh/sw.js` — `installSW`, `installChannel`, `SHARED_CACHE`, `CHANNEL` (page half of the Service Worker contract).
+- `double-meh/sw.js` — `installSW`, `installChannel`, `SHARED_CACHE`, `CHANNEL` (page half of the Service Worker contract). On `{transport: 'sw'}`, `io.stream.*` negotiates a transferred `ReadableStream` body; other shapes keep the buffered default.
 
 ## Core API
 

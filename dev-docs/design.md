@@ -916,6 +916,17 @@ disconnect. `writeThrough: true` lands parts in `io-shared` — lockstep with th
 cache-tier default. The `serviceWorker` container is injectable, so the fake-driven suite runs on
 all runtimes and real Chromium.
 
+**Built 2026-08-08 (streamed transport bodies)** — the `io:result` body shape is negotiated per
+request rather than versioned: `io:fetch` carries `stream: true` and the worker answers with a
+transferred `ReadableStream` where the platform can transfer one (advertised as the `stream`
+capability), falling back to the ArrayBuffer otherwise — so asking is always safe and a client that
+never asks sees byte-identical v1 behaviour. That is why this widening did **not** move
+`CONTRACT_VERSION`; the flag discriminates, exactly as the content type does for the bundler's
+`+jsonl` framing. The page half asks precisely when the caller declared a streamed shape
+(`io.stream.*` → `options.stream`), which keeps the buffered default on the prefetch path — and the
+buffered path is the one where the SW seeds its tier _before_ replying, the ordering that makes a
+navigation-surviving prefetch actually survive. (Lockstep: `double-meh-sw` `src/messages.js`.)
+
 **Built 2026-07-09 (invalidation channel)** — `src/sw.js` `installChannel(io)`: the cross-tab /
 SW invalidation loop on `BroadcastChannel('io')` (lockstep with the hub). Outbound,
 `io.cache.remove` with a **string** pattern (exact URL or trailing-`*` prefix — canonicalized to a

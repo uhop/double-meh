@@ -56,5 +56,11 @@ export declare function installChannel(io: IO, options?: ChannelInstallOptions):
  * controlling SW is present (and re-announces on `controllerchange`), and maintains `io.sw`.
  * Emits the `sw` event on connect and disconnect. Request bodies do not cross the channel;
  * interactive traffic stays on the default fetch transport.
+ *
+ * Response bodies are negotiated per request: any shape that sets `stream` (`io.stream.*`,
+ * `io.records.*`) asks the worker to transfer a `ReadableStream`, while every other shape keeps
+ * the buffered default — the path where the worker seeds its shared tier *before* it replies.
+ * A worker that cannot transfer streams answers buffered, so asking never needs a capability
+ * check.
  */
 export declare function installSW(io: IO, options?: SWInstallOptions): IO;

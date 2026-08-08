@@ -64,16 +64,18 @@ export const installSW = (io, options = {}) => {
             );
           }
         };
-        worker.postMessage(
-          {
-            type: FETCH,
-            id,
-            url: request.url,
-            method: request.method,
-            headers: [...request.headers]
-          },
-          [channel.port2]
-        );
+        const message = {
+          type: FETCH,
+          id,
+          url: request.url,
+          method: request.method,
+          headers: [...request.headers]
+        };
+        // the caller declared a streamed shape: have the worker transfer the body, not buffer it.
+        // Buffered stays the default — that is the path where the SW seeds its tier before replying,
+        // which is what makes a prefetch survive a navigation.
+        if (ctx.options.stream) message.stream = true;
+        worker.postMessage(message, [channel.port2]);
       });
     } finally {
       channel.port1.close();
