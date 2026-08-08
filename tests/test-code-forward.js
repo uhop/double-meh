@@ -2,8 +2,8 @@ import test from 'tape-six';
 import {io, json, serve, reset} from './helper.js';
 import {installCodeForward} from '../src/code-forward.js';
 
-const cleanup = () => {
-  reset();
+const cleanup = async () => {
+  await reset();
   delete globalThis.__doubleMeh;
 };
 
@@ -18,7 +18,7 @@ test('drain: pre-load inFlight + arrived hand off without hitting the network', 
   const data = await io.get('https://example.com/cf-drain');
   t.equal(calls, 0, 'transport not called — adopted from the drained arrival');
   t.deepEqual(data, {from: 'prelude'}, 'served the prefetched body');
-  cleanup();
+  await cleanup();
 });
 
 test('live: fly returns the key; arrived delivers a later response', async t => {
@@ -33,18 +33,18 @@ test('live: fly returns the key; arrived delivers a later response', async t => 
   const data = await io.get('https://example.com/cf-live');
   t.equal(calls, 0, 'transport not called');
   t.deepEqual(data, {from: 'prelude'}, 'adopted the arrived response');
-  cleanup();
+  await cleanup();
 });
 
-test('drain runs queued setup, passing io', t => {
+test('drain runs queued setup, passing io', async t => {
   let configured = false;
   globalThis.__doubleMeh = {setup: [arg => (configured = arg === io)]};
   installCodeForward(io);
   t.ok(configured, 'setup fn was called with io');
-  cleanup();
+  await cleanup();
 });
 
-test('the global stays a protocol marker, not the io object', t => {
+test('the global stays a protocol marker, not the io object', async t => {
   globalThis.__doubleMeh = {};
   installCodeForward(io);
   const dm = globalThis.__doubleMeh;
@@ -52,10 +52,10 @@ test('the global stays a protocol marker, not the io object', t => {
   t.equal(typeof dm.fly, 'function', 'fly installed');
   t.equal(typeof dm.arrived, 'function', 'arrived installed');
   t.notOk('get' in dm, 'io API is not copied onto the marker');
-  cleanup();
+  await cleanup();
 });
 
-test('ready event fires once on drain', t => {
+test('ready event fires once on drain', async t => {
   let fired = 0;
   const onReady = () => ++fired;
   io.on('ready', onReady);
@@ -63,5 +63,5 @@ test('ready event fires once on drain', t => {
   installCodeForward(io);
   t.equal(fired, 1, 'ready emitted once');
   io.off('ready', onReady);
-  cleanup();
+  await cleanup();
 });

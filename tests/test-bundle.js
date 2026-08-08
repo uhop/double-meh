@@ -48,7 +48,7 @@ const withBundler = async (t, run, mapPart) => {
     await run(counters);
   } finally {
     io.bundle.url = '';
-    reset();
+    await reset();
   }
 };
 
@@ -185,7 +185,7 @@ test('bundle: a part missing from the response rejects its waiter only', async t
     t.equal(counters.gets, 0, 'no silent fallback to an individual GET');
   } finally {
     io.bundle.url = '';
-    reset();
+    await reset();
   }
 });
 
@@ -210,7 +210,7 @@ test('bundle: a failed bundle PUT rejects every waiter with FailedIO', async t =
     );
   } finally {
     io.bundle.url = '';
-    reset();
+    await reset();
   }
 });
 
@@ -270,7 +270,7 @@ test('bundle: a 304 part revalidates the cached entry', async t => {
   } finally {
     io.bundle.minSize = savedMinSize;
     io.bundle.url = '';
-    reset();
+    await reset();
   }
 });
 
@@ -301,7 +301,7 @@ test('bundle: a bundle payload from any endpoint adopts unclaimed parts', async 
     t.deepEqual(a, DATA['/a'], 'prefetched part served');
     t.equal(counters.gets, 0, 'from the cache, not the wire');
   } finally {
-    reset();
+    await reset();
   }
 });
 
@@ -324,7 +324,7 @@ test('bundle: fly registers interest a later payload resolves', async t => {
     const envelope = await flying;
     t.deepEqual(envelope.data, DATA['/b'], 'the flying interest resolved with the part');
   } finally {
-    reset();
+    await reset();
   }
 });
 
@@ -441,9 +441,6 @@ const streamingBundler = (counters, script) => request => {
 
 const withStreamingBundler = async (run, script) => {
   const counters = {puts: 0, gets: 0, lastDoc: null, lastAccept: null};
-  // reset() fires io.cache.clear() without awaiting it; the browser backend is async, so an
-  // earlier test's cached /a and /b can survive into this one and never enter a bundle window
-  await io.cache.clear();
   serve(streamingBundler(counters, script));
   io.bundle.url = BASE + '/bundle';
   io.bundle.streaming = true;
@@ -452,7 +449,7 @@ const withStreamingBundler = async (run, script) => {
   } finally {
     io.bundle.streaming = false;
     io.bundle.url = '';
-    reset();
+    await reset();
   }
 };
 
@@ -581,7 +578,7 @@ test('bundle streaming: a bundler that answers buffered json still works', async
   } finally {
     io.bundle.streaming = false;
     io.bundle.url = '';
-    reset();
+    await reset();
   }
 });
 

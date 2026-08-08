@@ -11,7 +11,7 @@ test('track dedupes concurrent identical GETs', async t => {
   t.equal(calls, 1, 'transport called once for two concurrent gets');
   t.deepEqual(a, {n: 1}, 'first caller gets data');
   t.deepEqual(b, {n: 1}, 'second caller shares the same response');
-  reset();
+  await reset();
 });
 
 test('concurrent full gets share one decoded envelope (not cloned + reparsed)', async t => {
@@ -23,7 +23,7 @@ test('concurrent full gets share one decoded envelope (not cloned + reparsed)', 
   ]);
   t.equal(calls, 1, 'one network call');
   t.equal(a, b, 'same envelope object — decoded once at the run level');
-  reset();
+  await reset();
 });
 
 test('streaming requests are not deduped', async t => {
@@ -34,7 +34,7 @@ test('streaming requests are not deduped', async t => {
     io.full.get('https://example.com/stream', null, {stream: true})
   ]);
   t.equal(calls, 2, 'each streaming caller gets its own response');
-  reset();
+  await reset();
 });
 
 test('track does not dedupe different keys', async t => {
@@ -42,7 +42,7 @@ test('track does not dedupe different keys', async t => {
   serve(() => json({n: ++calls}));
   await Promise.all([io.get('https://example.com/a'), io.get('https://example.com/b')]);
   t.equal(calls, 2, 'distinct urls each hit the transport');
-  reset();
+  await reset();
 });
 
 test('adopt: a later get adopts an externally issued response', async t => {
@@ -52,7 +52,7 @@ test('adopt: a later get adopts an externally issued response', async t => {
   const data = await io.get('https://example.com/me');
   t.equal(calls, 0, 'transport not called — the adopted response was used');
   t.deepEqual(data, {from: 'prelude'}, 'the get resolves to the adopted body');
-  reset();
+  await reset();
 });
 
 test('track passes non-GET through to the transport', async t => {
@@ -63,7 +63,7 @@ test('track passes non-GET through to the transport', async t => {
   });
   await io.post('https://example.com/things', {a: 1});
   t.equal(method, 'POST', 'POST is not deduped');
-  reset();
+  await reset();
 });
 
 test('track is GET-only: track:true does not dedupe POSTs', async t => {
@@ -74,7 +74,7 @@ test('track is GET-only: track:true does not dedupe POSTs', async t => {
     io.post('https://example.com/p', {a: 2}, {track: true})
   ]);
   t.equal(calls, 2, 'each POST hits the transport');
-  reset();
+  await reset();
 });
 
 test("track: 'wait' on a non-GET throws", async t => {
@@ -105,7 +105,7 @@ test('the leader’s abort detaches only the leader; a follower survives', async
   t.equal(rb.status, 'fulfilled', 'the follower still gets the response');
   t.deepEqual(rb.value, {ok: true}, 'with the real body');
   t.equal(calls, 1, 'one deduped request served the survivor');
-  reset();
+  await reset();
 });
 
 test('the wire aborts only when the last waiter leaves', async t => {
@@ -127,7 +127,7 @@ test('the wire aborts only when the last waiter leaves', async t => {
   t.equal(ra.status, 'rejected', 'first caller rejected');
   t.equal(rb.status, 'rejected', 'second caller rejected');
   t.ok(seen.signal.aborted, 'the wire aborted when the last waiter left');
-  reset();
+  await reset();
 });
 
 test('a follower’s abort never touches the leader', async t => {
@@ -146,5 +146,5 @@ test('a follower’s abort never touches the leader', async t => {
   t.equal(ra.status, 'fulfilled', 'the leader completes');
   t.equal(rb.status, 'rejected', 'the aborting follower rejects');
   t.notOk(seen.signal.aborted, 'the wire was never aborted');
-  reset();
+  await reset();
 });

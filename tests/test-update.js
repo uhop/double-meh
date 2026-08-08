@@ -12,7 +12,7 @@ test('update: reads, applies fn, conditionally PUTs with the captured ETag', asy
   });
   const result = await io.update('https://example.com/u/1', cur => ({...cur, n: cur.n + 1}));
   t.deepEqual(result, {n: 2}, 'returns the updated representation');
-  reset();
+  await reset();
 });
 
 test('update: a 412 conflict re-reads and retries with the fresh ETag', async t => {
@@ -34,7 +34,7 @@ test('update: a 412 conflict re-reads and retries with the fresh ETag', async t 
   t.equal(gets, 2, 're-read after the 412');
   t.equal(puts, 2, 'retried the PUT');
   t.equal(result.x, 1, 'change eventually applied');
-  reset();
+  await reset();
 });
 
 test('update: fn returning undefined is a no-op (no PUT)', async t => {
@@ -46,7 +46,7 @@ test('update: fn returning undefined is a no-op (no PUT)', async t => {
   const result = await io.update('https://example.com/u/3', () => undefined);
   t.equal(puts, 0, 'no PUT issued');
   t.deepEqual(result, {n: 1}, 'returns the current value');
-  reset();
+  await reset();
 });
 
 test('update: refuses an unconditional update when the GET has no ETag', async t => {
@@ -62,7 +62,7 @@ test('update: refuses an unconditional update when the GET has no ETag', async t
     t.ok(error instanceof io.IOError, 'IOError thrown');
     t.equal(puts, 0, 'no PUT was issued');
   }
-  reset();
+  await reset();
 });
 
 test('update: force allows an unconditional update', async t => {
@@ -76,5 +76,5 @@ test('update: force allows an unconditional update', async t => {
   });
   t.equal(ifMatch, null, 'PUT went out without If-Match');
   t.deepEqual(result, {n: 1}, 'returns the server representation');
-  reset();
+  await reset();
 });

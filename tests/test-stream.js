@@ -14,7 +14,7 @@ test('io.stream.get yields the response body as a ReadableStream', async t => {
   const body = await io.stream.get('https://example.com/file');
   t.equal(typeof body.getReader, 'function', 'a ReadableStream comes back');
   t.equal(await new Response(body).text(), 'chunk-data', 'stream carries the payload');
-  reset();
+  await reset();
 });
 
 test('io.stream.get still composes query', async t => {
@@ -25,7 +25,7 @@ test('io.stream.get still composes query', async t => {
   });
   await io.stream.get('https://example.com/file', {page: 2});
   t.equal(seenUrl, 'https://example.com/file?page=2', 'query merged onto the streaming GET');
-  reset();
+  await reset();
 });
 
 test('io.put accepts a {readable} chain/duplex as the body', async t => {
@@ -39,7 +39,7 @@ test('io.put accepts a {readable} chain/duplex as the body', async t => {
   await io.put('https://example.com/x', {readable}, {as: 'text'});
   await done;
   t.equal(seen, 'piped-body', 'the .readable side was used as the request body');
-  reset();
+  await reset();
 });
 
 test('io.stream.put streams the request up and the response back as a duplex', async t => {
@@ -54,7 +54,7 @@ test('io.stream.put streams the request up and the response back as a duplex', a
   t.equal(out, 'echo:hello', 'request streamed up, response streamed back');
   const env = await up.response;
   t.equal(env.status, 200, '.response carries the metadata');
-  reset();
+  await reset();
 });
 
 test('io.stream.put: a non-2xx errors the readable and rejects .response', async t => {
@@ -77,7 +77,7 @@ test('io.stream.put: a non-2xx errors the readable and rejects .response', async
   } catch (error) {
     t.ok(error instanceof io.BadStatus, '.response rejects with BadStatus');
   }
-  reset();
+  await reset();
 });
 
 test('io.stream.post is the duplex form for POST', async t => {
@@ -87,7 +87,7 @@ test('io.stream.post is the duplex form for POST', async t => {
   const out = await new Response(up.readable).text();
   await done;
   t.equal(out, 'got:z', 'POST duplex streams like the PUT form');
-  reset();
+  await reset();
 });
 
 test('a non-2xx stream cancels the undrained error body', async t => {
@@ -113,5 +113,5 @@ test('a non-2xx stream cancels the undrained error body', async t => {
     t.ok(error instanceof io.BadStatus, 'BadStatus thrown');
   }
   t.ok(cancelled, 'the error body stream was cancelled, not leaked');
-  reset();
+  await reset();
 });

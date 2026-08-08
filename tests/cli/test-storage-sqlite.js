@@ -85,5 +85,5 @@ test('sqlite storage: drives the cache service end-to-end', {skip: isDeno}, asyn
   t.deepEqual(b, {n: 1}, 'cached body');
   storage.close();
   io.cache.storage = saved;
-  reset();
+  await reset();
 });

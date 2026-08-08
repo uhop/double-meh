@@ -21,7 +21,7 @@ test('zlib encoders: br compresses and roundtrips', async t => {
   t.ok(seen.body.byteLength < raw.length, 'compressed body is smaller than the JSON');
   const decoded = zlib.brotliDecompressSync(new Uint8Array(seen.body)).toString();
   t.deepEqual(JSON.parse(decoded), PAYLOAD, 'roundtrips');
-  reset();
+  await reset();
 });
 
 test('zlib encoders: zstd where the runtime ships it', {skip: !hasZstd}, async t => {
@@ -35,7 +35,7 @@ test('zlib encoders: zstd where the runtime ships it', {skip: !hasZstd}, async t
   t.equal(seen.headers.get('content-encoding'), 'zstd', 'Content-Encoding set');
   const decoded = zlib.zstdDecompressSync(new Uint8Array(seen.body)).toString();
   t.deepEqual(JSON.parse(decoded), PAYLOAD, 'roundtrips');
-  reset();
+  await reset();
 });
 
 test('zlib encoders: registration matches the runtime', async t => {

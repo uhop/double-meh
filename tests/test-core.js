@@ -7,7 +7,7 @@ test('GET returns parsed data', async t => {
     return json({hello: 'world'});
   });
   t.deepEqual(await io.get('https://example.com/x'), {hello: 'world'}, 'bare get yields data');
-  reset();
+  await reset();
 });
 
 test('io.full returns the envelope with a hoisted etag', async t => {
@@ -18,7 +18,7 @@ test('io.full returns the envelope with a hoisted etag', async t => {
   t.deepEqual(env.data, {a: 1}, 'data');
   t.equal(env.etag, '"v1"', 'etag hoisted');
   t.notOk(env.weak, 'strong validator');
-  reset();
+  await reset();
 });
 
 test('POST sends a JSON body and resolves Location', async t => {
@@ -34,7 +34,7 @@ test('POST sends a JSON body and resolves Location', async t => {
   t.equal(sentType, 'application/json', 'json content-type');
   t.equal(env.status, 201, 'created');
   t.equal(env.location, 'https://example.com/things/7', 'location resolved absolute');
-  reset();
+  await reset();
 });
 
 test('non-2xx throws BadStatus carrying the problem+json envelope', async t => {
@@ -50,7 +50,7 @@ test('non-2xx throws BadStatus carrying the problem+json envelope', async t => {
     t.equal(error.status, 404, 'status on the error');
     t.equal(error.data.title, 'Nope', 'parsed problem+json on the error');
   }
-  reset();
+  await reset();
 });
 
 test('io(options) is the low-level callable; verbs are sugar over it', async t => {
@@ -59,7 +59,7 @@ test('io(options) is the low-level callable; verbs are sugar over it', async t =
     return json({v: 1});
   });
   t.deepEqual(await io({url: 'https://example.com/x'}), {v: 1}, 'io(options) returns data');
-  reset();
+  await reset();
 });
 
 test('io.full(options) returns the envelope', async t => {
@@ -67,7 +67,7 @@ test('io.full(options) returns the envelope', async t => {
   const env = await io.full({url: 'https://example.com/x', method: 'POST', data: {a: 1}});
   t.equal(env.status, 201, 'status');
   t.deepEqual(env.data, {v: 1}, 'data');
-  reset();
+  await reset();
 });
 
 test('a reusable endpoint descriptor works across verbs with data', async t => {
@@ -84,7 +84,7 @@ test('a reusable endpoint descriptor works across verbs with data', async t => {
   t.equal(seen[1].method, 'PUT');
   t.equal(seen[1].body, JSON.stringify({name: 'Bob'}), 'PUT: data → body, same endpoint');
   t.equal(endpoint.url, 'https://example.com/things/1', 'endpoint descriptor not mutated');
-  reset();
+  await reset();
 });
 
 test('a URL object is accepted as the url', async t => {
@@ -95,7 +95,7 @@ test('a URL object is accepted as the url', async t => {
   });
   await io.get(new URL('https://example.com/u?z=1'));
   t.equal(sentUrl, 'https://example.com/u?z=1', 'URL object → url string');
-  reset();
+  await reset();
 });
 
 test('io(...) is multi-arg and does not force a method (defaults GET)', async t => {
@@ -109,7 +109,7 @@ test('io(...) is multi-arg and does not force a method (defaults GET)', async t 
   t.equal(seen[0].method, 'GET', 'io() defaults to GET when no method given');
   t.equal(seen[1].method, 'POST', 'io() uses the provided method (not forced)');
   t.equal(seen[1].body, JSON.stringify({a: 1}), 'data became the body for POST');
-  reset();
+  await reset();
 });
 
 test('3rd-arg overrides: scalar flags shallow-override, headers merge per-key, url stays', async t => {
@@ -133,7 +133,7 @@ test('3rd-arg overrides: scalar flags shallow-override, headers merge per-key, u
   t.equal(auth, 'Bearer t', 'endpoint Authorization preserved');
   t.equal(trace, 'call', 'override replaced only the X-Trace header');
   t.equal(accept, 'application/json-seq', 'scalar override (accept) applied');
-  reset();
+  await reset();
 });
 
 test('write verbs: undefined data sends no body; null is a valid JSON-null body', async t => {
@@ -149,7 +149,7 @@ test('write verbs: undefined data sends no body; null is a valid JSON-null body'
   await io.post('https://example.com/x', null);
   t.equal(body, 'null', 'null → JSON null body');
   t.equal(ct, 'application/json', 'with JSON content-type');
-  reset();
+  await reset();
 });
 
 test('read verbs: both null and undefined data drop the query', async t => {
@@ -162,7 +162,7 @@ test('read verbs: both null and undefined data drop the query', async t => {
   t.equal(url, 'https://example.com/q1', 'undefined → no query');
   await io.get('https://example.com/q2', null);
   t.equal(url, 'https://example.com/q2', 'null → no query');
-  reset();
+  await reset();
 });
 
 test('a URL with a fragment keeps the query ahead of the fragment', async t => {
@@ -173,7 +173,7 @@ test('a URL with a fragment keeps the query ahead of the fragment', async t => {
   });
   await io.get('https://example.com/a#top', {q: 1});
   t.equal(sentUrl, 'https://example.com/a?q=1#top', 'query inserted before the fragment');
-  reset();
+  await reset();
 });
 
 test('a Headers instance is accepted for options.headers', async t => {
@@ -184,7 +184,7 @@ test('a Headers instance is accepted for options.headers', async t => {
   });
   await io.get('https://example.com/h', null, {headers: new Headers({'X-Trace': 'hdr'})});
   t.equal(trace, 'hdr', 'headers from a Headers instance are sent');
-  reset();
+  await reset();
 });
 
 test('URLSearchParams is accepted as a query', async t => {
@@ -195,7 +195,7 @@ test('URLSearchParams is accepted as a query', async t => {
   });
   await io.get('https://example.com/usp', new URLSearchParams({a: '1', b: '2'}));
   t.equal(sentUrl, 'https://example.com/usp?a=1&b=2', 'params serialized into the query');
-  reset();
+  await reset();
 });
 
 test('DELETE: positional data goes to the query; explicit options.data is the body', async t => {
@@ -209,7 +209,7 @@ test('DELETE: positional data goes to the query; explicit options.data is the bo
   t.equal(seen[0].body, undefined, 'no body from positional data');
   await io.delete('https://example.com/d2', null, {data: {ids: [1, 2]}});
   t.equal(seen[1].body, JSON.stringify({ids: [1, 2]}), 'explicit data → JSON body');
-  reset();
+  await reset();
 });
 
 test('decode forces the response parsing mode', async t => {
@@ -224,7 +224,7 @@ test('decode forces the response parsing mode', async t => {
     {a: 1},
     'decode json overrides the content type'
   );
-  reset();
+  await reset();
 });
 
 test('makeKey canonicalizes: sorts query, drops fragment', t => {

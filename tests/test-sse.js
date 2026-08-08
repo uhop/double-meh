@@ -26,7 +26,7 @@ test('sse parses events: comments, multiline data, types, ids', async t => {
     ],
     'comment skipped, multiline joined, incomplete tail discarded'
   );
-  reset();
+  await reset();
 });
 
 test('sse reconnects with Last-Event-ID; a 204 ends the subscription', async t => {
@@ -44,7 +44,7 @@ test('sse reconnects with Last-Event-ID; a 204 ends the subscription', async t =
   t.equal(calls, 2, 'reconnected once, then the 204 ended it');
   t.equal(ids[0], null, 'no Last-Event-ID on the first connect');
   t.equal(ids[1], '1', 'Last-Event-ID sent on reconnect');
-  reset();
+  await reset();
 });
 
 test('sse resumes from a supplied lastEventId', async t => {
@@ -60,7 +60,7 @@ test('sse resumes from a supplied lastEventId', async t => {
     void event;
   }
   t.equal(sent, '42', 'initial connect carries the supplied id');
-  reset();
+  await reset();
 });
 
 test('sse: a non-2xx is fatal and carries the parsed problem', async t => {
@@ -75,7 +75,7 @@ test('sse: a non-2xx is fatal and carries the parsed problem', async t => {
     t.equal(error.status, 503, 'status');
     t.equal(error.data.title, 'Down', 'problem body parsed');
   }
-  reset();
+  await reset();
 });
 
 test('sse: a wrong content type is fatal', async t => {
@@ -87,7 +87,7 @@ test('sse: a wrong content type is fatal', async t => {
     t.ok(error instanceof io.FailedIO, 'FailedIO');
     t.ok(/content type/.test(error.message), 'names the content-type mismatch');
   }
-  reset();
+  await reset();
 });
 
 test('sse: an abort stops the subscription', async t => {
@@ -115,7 +115,7 @@ test('sse: an abort stops the subscription', async t => {
     t.equal(error.name, 'AbortError', 'abort surfaced, no reconnect');
   }
   t.deepEqual(seen, ['a'], 'events before the abort were delivered');
-  reset();
+  await reset();
 });
 
 test('sse: breaking out stops without reconnecting', async t => {
@@ -132,5 +132,5 @@ test('sse: breaking out stops without reconnecting', async t => {
   await new Promise(resolve => setTimeout(resolve, 20));
   t.deepEqual(seen, ['a'], 'stopped after the first event');
   t.equal(calls, 1, 'no reconnect after the consumer broke out');
-  reset();
+  await reset();
 });

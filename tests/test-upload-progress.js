@@ -128,5 +128,5 @@ test('upload progress: a mock-served request reports nothing', async t => {
     onUploadProgress: info => events.push(info)
   });
   t.equal(events.length, 0, 'no wire, no upload events');
-  reset();
+  await reset();
 });

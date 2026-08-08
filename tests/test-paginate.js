@@ -24,7 +24,7 @@ test('paginate: offset envelope with a total', async t => {
     urls[1].includes('offset=2') && urls[1].includes('limit=2'),
     'offset advanced by items.length'
   );
-  reset();
+  await reset();
 });
 
 test('paginate: advances by what arrived, not the requested limit', async t => {
@@ -44,7 +44,7 @@ test('paginate: advances by what arrived, not the requested limit', async t => {
   t.deepEqual(rows, all, 'no rows skipped despite the clamp');
   t.ok(urls[1].includes('offset=2'), 'the echoed page size drives the offset, not the request');
   t.ok(urls[1].includes('limit=2'), 'the echoed effective limit is reused');
-  reset();
+  await reset();
 });
 
 test('paginate: offset envelope without a total stops on a short page', async t => {
@@ -62,7 +62,7 @@ test('paginate: offset envelope without a total stops on a short page', async t 
   }
   t.deepEqual(rows, all, 'all rows in order');
   t.equal(urls.length, 3, 'the short last page ends the loop without an extra request');
-  reset();
+  await reset();
 });
 
 test('paginate: body links drive the loop; their absence is the last page', async t => {
@@ -81,7 +81,7 @@ test('paginate: body links drive the loop; their absence is the last page', asyn
   t.deepEqual(rows, all, 'all rows in order');
   t.equal(urls.length, 2, 'two pages');
   t.ok(urls[1].startsWith('https://example.com/linked?offset=2'), 'relative next resolved');
-  reset();
+  await reset();
 });
 
 test('paginate: cursor envelope; a null cursor is the last page', async t => {
@@ -104,7 +104,7 @@ test('paginate: cursor envelope; a null cursor is the last page', async t => {
   t.equal(urls.length, 2, 'two pages');
   t.ok(urls[1].includes('cursor=c2'), 'the opaque cursor echoed back');
   t.ok(urls[1].includes('limit=2'), 'the effective limit rides along');
-  reset();
+  await reset();
 });
 
 test('paginate: a bare array pages by the Link header', async t => {
@@ -124,7 +124,7 @@ test('paginate: a bare array pages by the Link header', async t => {
   for await (const row of io.paginate('https://example.com/bare')) rows.push(row);
   t.deepEqual(rows, all, 'all rows in order');
   t.equal(urls.length, 2, 'header links followed; absence ends the loop');
-  reset();
+  await reset();
 });
 
 test('paginate: a repeating next link throws instead of looping', async t => {
@@ -135,7 +135,7 @@ test('paginate: a repeating next link throws instead of looping', async t => {
   } catch (error) {
     t.ok(error instanceof io.FailedIO, 'FailedIO on a page loop');
   }
-  reset();
+  await reset();
 });
 
 test('paginate: a non-list response throws FailedIO', async t => {
@@ -146,7 +146,7 @@ test('paginate: a non-list response throws FailedIO', async t => {
   } catch (error) {
     t.ok(error instanceof io.FailedIO, 'FailedIO on an unrecognized shape');
   }
-  reset();
+  await reset();
 });
 
 test('paginate: lazy — no request until the first iteration', async t => {
@@ -160,5 +160,5 @@ test('paginate: lazy — no request until the first iteration', async t => {
   t.equal(calls, 0, 'creating the iterator fires nothing');
   await rows.next();
   t.equal(calls, 1, 'the first next() fires the request');
-  reset();
+  await reset();
 });

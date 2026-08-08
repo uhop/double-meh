@@ -16,7 +16,7 @@ test('getByIds: a comma-joined ?ids= GET', async t => {
   t.equal(result.method, 'GET', 'a plain GET');
   t.ok(result.url.includes('ids=ap-31%2Cap-77'), 'ids comma-joined in one parameter');
   t.equal(result.body, null, 'no body');
-  reset();
+  await reset();
 });
 
 test('getByIds: numeric ids and other query params compose', async t => {
@@ -29,7 +29,7 @@ test('getByIds: numeric ids and other query params compose', async t => {
   t.equal(url.searchParams.get('ids'), '1,2,3', 'numbers joined');
   t.equal(url.searchParams.get('fields'), 'name', 'fields lowering still applies');
   t.equal(url.searchParams.get('expandable'), 'no', 'user query params preserved');
-  reset();
+  await reset();
 });
 
 test('getByIds: an overflowing URL falls back to a POST body', async t => {
@@ -42,7 +42,7 @@ test('getByIds: an overflowing URL falls back to a POST body', async t => {
   t.notOk(result.url.includes('ids='), 'the id list left the URL');
   t.deepEqual(JSON.parse(result.body), {keys: ids}, 'the id list moved to the body as {keys}');
   io.getByIds.urlLimit = saved;
-  reset();
+  await reset();
 });
 
 test('getByIds: the GET form stays under the default limit', async t => {
@@ -51,5 +51,5 @@ test('getByIds: the GET form stays under the default limit', async t => {
   const ids = Array.from({length: 50}, (_, i) => 'id-' + i);
   const result = await io.getByIds('https://example.com/users/by-ids', ids);
   t.equal(result.method, 'GET', '50 short ids still fit in a GET');
-  reset();
+  await reset();
 });

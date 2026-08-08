@@ -18,7 +18,7 @@ test('io.create() yields an isolated, fully equipped instance', async t => {
   );
   t.ok(other.track && other.cache && other.retry, 'services installed on the child');
   other.mock.clear();
-  reset();
+  await reset();
 });
 
 test('scoped inspectors fire only for matching URLs', async t => {

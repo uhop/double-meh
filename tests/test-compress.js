@@ -17,7 +17,7 @@ test('compress: gzip — the body shrinks and roundtrips', async t => {
   const raw = JSON.stringify(PAYLOAD);
   t.ok(seen.body.byteLength < raw.length, 'compressed body is smaller than the JSON');
   t.deepEqual(JSON.parse(await decompress(seen.body, 'gzip')), PAYLOAD, 'roundtrips');
-  reset();
+  await reset();
 });
 
 test('compress: true means gzip', async t => {
@@ -28,7 +28,7 @@ test('compress: true means gzip', async t => {
   });
   await io.post('https://example.com/zt', PAYLOAD, {compress: true});
   t.equal(seen.headers.get('content-encoding'), 'gzip', 'gzip is the default encoder');
-  reset();
+  await reset();
 });
 
 test('compress: deflate roundtrips', async t => {
@@ -40,7 +40,7 @@ test('compress: deflate roundtrips', async t => {
   await io.post('https://example.com/zd', PAYLOAD, {compress: 'deflate'});
   t.equal(seen.headers.get('content-encoding'), 'deflate', 'Content-Encoding set');
   t.deepEqual(JSON.parse(await decompress(seen.body, 'deflate')), PAYLOAD, 'roundtrips');
-  reset();
+  await reset();
 });
 
 test('compress: an unknown encoder throws', async t => {
@@ -52,7 +52,7 @@ test('compress: an unknown encoder throws', async t => {
     t.ok(error instanceof TypeError, 'TypeError');
     t.ok(/unknown compression encoder: lzma/.test(error.message), 'named in the message');
   }
-  reset();
+  await reset();
 });
 
 test('compress: a bodyless request is untouched', async t => {
@@ -63,7 +63,7 @@ test('compress: a bodyless request is untouched', async t => {
   });
   await io.get('https://example.com/zg', null, {compress: 'gzip', cache: false});
   t.equal(seen.headers.get('content-encoding'), null, 'no Content-Encoding on a GET');
-  reset();
+  await reset();
 });
 
 test('compress: a stream body stays a stream', async t => {
@@ -83,7 +83,7 @@ test('compress: a stream body stays a stream', async t => {
   t.equal(typeof seen.body.getReader, 'function', 'the compressed body is still a stream');
   t.equal(seen.headers.get('content-encoding'), 'gzip', 'Content-Encoding set');
   t.equal(await decompress(seen.body, 'gzip'), text, 'stream content roundtrips');
-  reset();
+  await reset();
 });
 
 test('compress: an inline encoder function is the escape hatch', async t => {
@@ -101,7 +101,7 @@ test('compress: an inline encoder function is the escape hatch', async t => {
   t.equal(called, 1, 'the inline encoder ran');
   t.equal(seen.headers.get('content-encoding'), null, 'no automatic Content-Encoding — no name');
   t.deepEqual(JSON.parse(await decompress(seen.body, 'gzip')), PAYLOAD, 'roundtrips');
-  reset();
+  await reset();
 });
 
 test('compress: an inline encoder pairs with an explicit header', async t => {
@@ -117,7 +117,7 @@ test('compress: an inline encoder pairs with an explicit header', async t => {
   });
   t.equal(seen.headers.get('content-encoding'), 'deflate', 'the caller-set header rides through');
   t.deepEqual(JSON.parse(await decompress(seen.body, 'deflate')), PAYLOAD, 'roundtrips');
-  reset();
+  await reset();
 });
 
 test('compress: a FormData body refuses loudly', async t => {
@@ -130,5 +130,5 @@ test('compress: a FormData body refuses loudly', async t => {
   } catch (error) {
     t.ok(/cannot compress a FormData body/.test(error.message), 'refused with the reason');
   }
-  reset();
+  await reset();
 });

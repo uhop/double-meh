@@ -13,7 +13,7 @@ test('a user abort surfaces as AbortError, not FailedIO', async t => {
     t.equal(error.name, 'AbortError', 'abort passed through');
     t.notOk(error instanceof io.IOError, 'not wrapped');
   }
-  reset();
+  await reset();
 });
 
 test('timeout produces TimedOut', async t => {
@@ -26,7 +26,7 @@ test('timeout produces TimedOut', async t => {
     t.ok(error instanceof io.FailedIO, 'TimedOut is a FailedIO');
     t.ok(error instanceof io.IOError, 'and an IOError');
   }
-  reset();
+  await reset();
 });
 
 test('a network failure wraps into FailedIO with the cause preserved', async t => {
@@ -39,7 +39,7 @@ test('a network failure wraps into FailedIO with the cause preserved', async t =
     t.equal(error.message, 'boom', 'message from the cause');
     t.equal(error.cause && error.cause.message, 'boom', 'original error on .cause');
   }
-  reset();
+  await reset();
 });
 
 test('malformed JSON on a 200 fails loudly with the response attached', async t => {
@@ -52,14 +52,14 @@ test('malformed JSON on a 200 fails loudly with the response attached', async t 
     t.ok(error.cause instanceof SyntaxError, 'SyntaxError on .cause');
     t.ok(error.response, 'the response is attached');
   }
-  reset();
+  await reset();
 });
 
 test('an empty JSON body decodes as undefined', async t => {
   serve(() => new Response('', {status: 200, headers: {'content-type': 'application/json'}}));
   const data = await io.get('https://example.com/empty');
   t.equal(data, undefined, 'empty body → undefined');
-  reset();
+  await reset();
 });
 
 test('BadStatus carries the inspected envelope data', async t => {
@@ -76,7 +76,7 @@ test('BadStatus carries the inspected envelope data', async t => {
   } finally {
     io.responseInspectors.length = 0;
   }
-  reset();
+  await reset();
 });
 
 test('download progress reports received bytes', async t => {
@@ -94,7 +94,7 @@ test('download progress reports received bytes', async t => {
   t.equal(data, '0123456789', 'body decoded');
   t.ok(seen.length > 0, 'progress reported');
   t.equal(seen[seen.length - 1].loaded, 10, 'final loaded matches the size');
-  reset();
+  await reset();
 });
 
 test('lifecycle events fire around a request', async t => {
@@ -113,7 +113,7 @@ test('lifecycle events fire around a request', async t => {
   }
   io.off('request', onRequest).off('success', onSuccess).off('failure', onFailure);
   t.deepEqual(events, ['request', 'success', 'request', 'failure'], 'events in order');
-  reset();
+  await reset();
 });
 
 test('problem: a problem+json body is the parsed problem document', async t => {
@@ -132,7 +132,7 @@ test('problem: a problem+json body is the parsed problem document', async t => {
     t.equal(error.problem, error.data, 'problem IS the parsed data — no copy');
     t.equal(error.problem.title, 'Nope', 'RFC 9457 fields readable');
   }
-  reset();
+  await reset();
 });
 
 test('problem: a mislabeled JSON envelope is sniffed and parsed', async t => {
@@ -151,7 +151,7 @@ test('problem: a mislabeled JSON envelope is sniffed and parsed', async t => {
     t.deepEqual(error.problem, {errorCode: 17, reason: 'legacy'}, 'problem is the parsed envelope');
     t.equal(error.problem, error.problem, 'parsed once — memoized');
   }
-  reset();
+  await reset();
 });
 
 test('problem: a JSON array envelope parses too', async t => {
@@ -168,7 +168,7 @@ test('problem: a JSON array envelope parses too', async t => {
   } catch (error) {
     t.deepEqual(error.problem, [{field: 'name', message: 'required'}], 'array envelopes work');
   }
-  reset();
+  await reset();
 });
 
 test('problem: unparseable bodies yield undefined', async t => {
@@ -186,7 +186,7 @@ test('problem: unparseable bodies yield undefined', async t => {
     } catch (error) {
       t.equal(error.problem, undefined, `no parse for ${JSON.stringify(body.slice(0, 12))}`);
     }
-    reset();
+    await reset();
   }
 });
 
@@ -204,7 +204,7 @@ test('problem: an opaque forced decode yields undefined', async t => {
   } catch (error) {
     t.equal(error.problem, undefined, 'a Blob is not a parsed envelope');
   }
-  reset();
+  await reset();
 });
 
 test('problem: a MIME processor is the seam for XML and other legacy types', async t => {

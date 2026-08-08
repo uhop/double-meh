@@ -7,7 +7,7 @@ test('retries a 5xx then succeeds', async t => {
   const data = await io.get('https://example.com/r', null, {retry: {retries: 3, initDelay: 0}});
   t.equal(calls, 2, 'retried once, then 200');
   t.deepEqual(data, {ok: true}, 'final body returned');
-  reset();
+  await reset();
 });
 
 test('exhausts retries then surfaces the failure', async t => {
@@ -23,7 +23,7 @@ test('exhausts retries then surfaces the failure', async t => {
     t.equal(calls, 3, 'initial call + 2 retries');
     t.equal(e.status, 500, 'final 500 surfaced as BadStatus');
   }
-  reset();
+  await reset();
 });
 
 test('retries a network error', async t => {
@@ -32,7 +32,7 @@ test('retries a network error', async t => {
   const data = await io.get('https://example.com/r', null, {retry: {retries: 2, initDelay: 0}});
   t.equal(calls, 2, 'retried after the network error');
   t.deepEqual(data, {ok: true});
-  reset();
+  await reset();
 });
 
 test('retry: true uses the default retry count', async t => {
@@ -46,7 +46,7 @@ test('retry: true uses the default retry count', async t => {
   await io.get('https://example.com/rd', null, {retry: true, ignoreBadStatus: true});
   io.retry.initDelay = saved;
   t.equal(calls, 1 + io.retry.retries, 'initial call + the default retries');
-  reset();
+  await reset();
 });
 
 test('safety gate: bare POST not retried; an idempotency key or force enables it', async t => {
@@ -75,7 +75,7 @@ test('safety gate: bare POST not retried; an idempotency key or force enables it
     {retry: {retries: 1, initDelay: 0, force: true}, ignoreBadStatus: true}
   );
   t.equal(calls, 2, 'force overrides the safety gate explicitly');
-  reset();
+  await reset();
 });
 
 test('a retried DELETE that returns 404 is treated as success (204)', async t => {
@@ -86,7 +86,7 @@ test('a retried DELETE that returns 404 is treated as success (204)', async t =>
   });
   t.equal(calls, 2, 'retried, then got 404');
   t.equal(env.status, 204, '404-on-retry → 204 success');
-  reset();
+  await reset();
 });
 
 test('idempotencyKey: true generates a key reused across retries', async t => {
@@ -103,7 +103,7 @@ test('idempotencyKey: true generates a key reused across retries', async t => {
   t.equal(keys.length, 2, 'retried');
   t.ok(keys[0], 'a key was generated');
   t.equal(keys[0], keys[1], 'same key reused across the retry');
-  reset();
+  await reset();
 });
 
 test('continueRetries with retries: 0 polls until the predicate stops', async t => {
@@ -114,7 +114,7 @@ test('continueRetries with retries: 0 polls until the predicate stops', async t 
   });
   t.equal(calls, 3, 'polled through two 202s');
   t.deepEqual(data, {status: 'done'}, 'resolved with the final body');
-  reset();
+  await reset();
 });
 
 test('an abort is not retried and surfaces as-is', async t => {
@@ -131,7 +131,7 @@ test('an abort is not retried and surfaces as-is', async t => {
     t.equal(error.name, 'AbortError', 'the abort surfaced untouched');
     t.notOk(error instanceof io.IOError, 'not wrapped into an IOError');
   }
-  reset();
+  await reset();
 });
 
 test('retries are off by default (no retry option)', async t => {
@@ -142,5 +142,5 @@ test('retries are off by default (no retry option)', async t => {
   });
   await io.get('https://example.com/r', null, {ignoreBadStatus: true});
   t.equal(calls, 1, 'no retry without the retry option');
-  reset();
+  await reset();
 });

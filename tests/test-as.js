@@ -8,7 +8,7 @@ const ctOf = async (as, body = 'raw') => {
     return json({ok: 1});
   });
   await io.put('https://example.com/x', body, {as});
-  reset();
+  await reset();
   return ct;
 };
 
@@ -45,7 +45,7 @@ test('as: an explicit content-type header wins over as (and over object auto-jso
     {as: 'json', headers: {'content-type': 'text/plain'}}
   );
   t.equal(ct, 'text/plain', 'caller-set content-type is not overridden');
-  reset();
+  await reset();
 });
 
 test('io.mimeTypes is a mutable registry', async t => {

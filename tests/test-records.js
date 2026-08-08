@@ -17,7 +17,7 @@ test('records.get iterates JSONL records', async t => {
   const seen = [];
   for await (const record of io.records.get('https://example.com/r')) seen.push(record);
   t.deepEqual(seen, [{a: 1}, {a: 2}, {a: 3}], 'all records parsed');
-  reset();
+  await reset();
 });
 
 test('records survive chunk boundaries mid-record and mid-CRLF', async t => {
@@ -25,7 +25,7 @@ test('records survive chunk boundaries mid-record and mid-CRLF', async t => {
   const seen = [];
   for await (const record of io.records.get('https://example.com/rc')) seen.push(record);
   t.deepEqual(seen, [{a: 1}, {b: 2}, {c: 3}], 'boundaries handled, incl. a trailing record');
-  reset();
+  await reset();
 });
 
 test('json-seq framing is selected by the content type', async t => {
@@ -33,7 +33,7 @@ test('json-seq framing is selected by the content type', async t => {
   const seen = [];
   for await (const record of io.records.get('https://example.com/seq')) seen.push(record);
   t.deepEqual(seen, [{a: 1}, {a: 2}], 'RS-framed records parsed');
-  reset();
+  await reset();
 });
 
 test('framing can be forced', async t => {
@@ -49,7 +49,7 @@ test('framing can be forced', async t => {
   } catch (error) {
     t.ok(error instanceof TypeError, 'unknown framing fails fast');
   }
-  reset();
+  await reset();
 });
 
 test('records.post sends the body and streams records back', async t => {
@@ -67,7 +67,7 @@ test('records.post sends the body and streams records back', async t => {
   t.equal(sent, JSON.stringify({q: 'x'}), 'query went up as the JSON body');
   t.deepEqual(seen, [{hit: 1}], 'records streamed back');
   t.equal(accept, 'application/x-ndjson, application/json-seq', 'record formats advertised');
-  reset();
+  await reset();
 });
 
 test('breaking out cancels the underlying stream', async t => {
@@ -90,7 +90,7 @@ test('breaking out cancels the underlying stream', async t => {
     break;
   }
   t.ok(cancelled, 'the response stream was cancelled on early exit');
-  reset();
+  await reset();
 });
 
 test('a bad status surfaces as BadStatus with the parsed body', async t => {
@@ -105,7 +105,7 @@ test('a bad status surfaces as BadStatus with the parsed body', async t => {
     t.equal(error.status, 404, 'status');
     t.equal(error.data.title, 'Nope', 'error body parsed, not left as a stream');
   }
-  reset();
+  await reset();
 });
 
 test('a malformed record throws FailedIO with the cause attached', async t => {
@@ -119,7 +119,7 @@ test('a malformed record throws FailedIO with the cause attached', async t => {
     t.ok(error instanceof io.FailedIO, 'FailedIO');
     t.ok(error.cause instanceof SyntaxError, 'SyntaxError on .cause');
   }
-  reset();
+  await reset();
 });
 
 test('an abort mid-iteration surfaces even when the transport ignores the signal', async t => {
@@ -147,5 +147,5 @@ test('an abort mid-iteration surfaces even when the transport ignores the signal
     t.equal(error.name, 'AbortError', 'abort surfaced');
   }
   t.deepEqual(seen, [{a: 1}], 'records before the abort were delivered');
-  reset();
+  await reset();
 });

@@ -11,7 +11,7 @@ test('GETs are cached by default; cache:false opts out', async t => {
   t.deepEqual(b, {n: 1}, 'cached body on the second call');
   await io.get('https://example.com/c', null, {cache: false});
   t.equal(calls, 2, 'cache:false bypasses the cache');
-  reset();
+  await reset();
 });
 
 test('io.cache.theDefault scopes default caching', async t => {
@@ -26,7 +26,7 @@ test('io.cache.theDefault scopes default caching', async t => {
   await io.get('https://cached.example/x');
   t.equal(calls, 3, 'inside the predicate the second GET hits the cache');
   io.cache.theDefault = saved;
-  reset();
+  await reset();
 });
 
 test('an entry past its ttl is refetched', async t => {
@@ -35,7 +35,7 @@ test('an entry past its ttl is refetched', async t => {
   await io.get('https://example.com/t', null, {cache: {ttl: 0}});
   await io.get('https://example.com/t', null, {cache: {ttl: 0}});
   t.equal(calls, 2, 'expired entry (ttl 0) refetched');
-  reset();
+  await reset();
 });
 
 test('a stale entry with an ETag revalidates and reuses the body on 304', async t => {
@@ -50,7 +50,7 @@ test('a stale entry with an ETag revalidates and reuses the body on 304', async 
   const b = await io.get('https://example.com/r', null, {cache: {ttl: 0}});
   t.equal(calls, 2, 'revalidated with a conditional request');
   t.deepEqual(b, {v: 1}, 'served the cached body on 304');
-  reset();
+  await reset();
 });
 
 test('a 304 refreshes the stored headers', async t => {
@@ -65,7 +65,7 @@ test('a 304 refreshes the stored headers', async t => {
   const env = await io.full.get('https://example.com/rf', null, {cache: {ttl: 0}});
   t.equal(calls, 2, 'revalidated');
   t.equal(env.headers['x-fresh'], 'yes', '304 headers merged into the stored entry');
-  reset();
+  await reset();
 });
 
 test('cache.remove evicts an entry so the next GET refetches', async t => {
@@ -75,7 +75,7 @@ test('cache.remove evicts an entry so the next GET refetches', async t => {
   await io.cache.remove('https://example.com/users/42');
   await io.get('https://example.com/users/42');
   t.equal(calls, 2, 'removed entry refetched');
-  reset();
+  await reset();
 });
 
 test('cache.remove with a trailing * evicts by prefix', async t => {
@@ -86,7 +86,7 @@ test('cache.remove with a trailing * evicts by prefix', async t => {
   await io.cache.remove('https://example.com/users/*');
   await io.get('https://example.com/users/1');
   t.equal(calls, 3, 'both evicted by prefix; the refetch is a 3rd call');
-  reset();
+  await reset();
 });
 
 test('adopt pre-populates the cache: a later bare GET hits without a network call', async t => {
@@ -97,7 +97,7 @@ test('adopt pre-populates the cache: a later bare GET hits without a network cal
   const data = await io.get('https://example.com/cf');
   t.equal(calls, 0, 'served from the cache that adopt populated');
   t.deepEqual(data, {from: 'prefetch'}, 'the adopted body, durable past the in-flight window');
-  reset();
+  await reset();
 });
 
 test('bust skips the cache and uniquifies the URL', async t => {
@@ -112,7 +112,7 @@ test('bust skips the cache and uniquifies the URL', async t => {
   t.equal(calls, 2, 'busted requests are never cached');
   t.ok(urls[0].includes('io-bust='), 'bust parameter appended');
   t.notEqual(urls[0], urls[1], 'each request gets a fresh bust value');
-  reset();
+  await reset();
 });
 
 test('non-2xx responses are not cached', async t => {
@@ -121,5 +121,5 @@ test('non-2xx responses are not cached', async t => {
   await io.get('https://example.com/e', null, {ignoreBadStatus: true});
   await io.get('https://example.com/e', null, {ignoreBadStatus: true});
   t.equal(calls, 2, 'errors are passed through, never stored');
-  reset();
+  await reset();
 });

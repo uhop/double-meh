@@ -15,7 +15,7 @@ test('options.fetch passes RequestInit fields through to fetch()', async t => {
     t.equal(seenInit.method, 'GET', "double-meh's own method still wins");
   } finally {
     globalThis.fetch = realFetch;
-    reset();
+    await reset();
   }
 });
 
@@ -33,7 +33,7 @@ test('track wait: registers interest without firing; a real request resolves the
   t.equal(hits, 1, 'exactly one real request fired');
   t.deepEqual(w, {v: 42}, 'the waiter resolved with the landed data');
   t.deepEqual(r, {v: 42}, 'the real request resolved too');
-  reset();
+  await reset();
 });
 
 test('the page option lowers to offset/limit/cursor query params', async t => {
@@ -50,7 +50,7 @@ test('the page option lowers to offset/limit/cursor query params', async t => {
   url = new URL(seen);
   t.equal(url.searchParams.get('cursor'), 'eyJpZCI6Ijk5In0', 'cursor lowered');
   t.equal(url.searchParams.get('offset'), null, 'absent page fields contribute nothing');
-  reset();
+  await reset();
 });
 
 test('the query object bag: values stringify, arrays repeat by default, empties drop', async t => {
@@ -83,7 +83,7 @@ test('the query object bag: values stringify, arrays repeat by default, empties 
   t.notOk(url.searchParams.has('empty'), 'an empty array contributes nothing');
   t.notOk(url.searchParams.has('missing'), 'undefined drops');
   t.notOk(url.searchParams.has('none'), 'null drops');
-  reset();
+  await reset();
 });
 
 test('listSeparator: a string joins query lists; the builders follow', async t => {
@@ -105,7 +105,7 @@ test('listSeparator: a string joins query lists; the builders follow', async t =
   url = new URL(seen);
   t.equal(url.searchParams.get('tags'), 'a,b', 'comma is an explicit choice');
   t.equal(url.searchParams.getAll('tags').length, 1, 'a single param');
-  reset();
+  await reset();
 });
 
 test('listSeparator: fields keep their protocol comma unless overridden', async t => {
@@ -125,7 +125,7 @@ test('listSeparator: fields keep their protocol comma unless overridden', async 
     ['id', 'name'],
     'an explicit null flips the builders to repeated keys'
   );
-  reset();
+  await reset();
 });
 
 test('io.defaults: scoped option defaults apply; per-call options win', async t => {
@@ -188,7 +188,7 @@ test('a URLSearchParams query rides verbatim — the repeated-params escape hatc
   await io.get('https://example.com/usp', params);
   const url = new URL(seen);
   t.deepEqual(url.searchParams.getAll('tag'), ['new', 'sale'], 'repeats preserved');
-  reset();
+  await reset();
 });
 
 test('options.query carries the query when the positional data is a body', async t => {
@@ -201,5 +201,5 @@ test('options.query carries the query when the positional data is a body', async
   const url = new URL(seen.url);
   t.equal(url.searchParams.get('dept'), '42', 'query rides the URL');
   t.deepEqual(JSON.parse(seen.body), {name: 'unit-1'}, 'the body is untouched');
-  reset();
+  await reset();
 });

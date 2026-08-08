@@ -103,6 +103,6 @@ test('fs storage: drives the cache service end-to-end', async t => {
   t.deepEqual(b, {n: 1}, 'cached body');
   await io.cache.clear();
   io.cache.storage = saved;
-  reset();
+  await reset();
   await fs.rm(directory, {recursive: true, force: true});
 });

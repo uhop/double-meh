@@ -14,7 +14,7 @@ test('accept variants coexist in the cache', async t => {
   t.equal(calls, 2, 'both variants served from the cache');
   t.deepEqual(a2, a, 'default variant preserved');
   t.deepEqual(b2, b, 'alternate variant preserved');
-  reset();
+  await reset();
 });
 
 test('track dedups per representation, not per URL', async t => {
@@ -29,7 +29,7 @@ test('track dedups per representation, not per URL', async t => {
   t.equal(calls, 2, 'one request per representation');
   t.notDeepEqual(a, b, 'different accepts did not share an envelope');
   t.deepEqual(b, c, 'same accept shared one request');
-  reset();
+  await reset();
 });
 
 test('an explicit application/json is the same identity as the default', async t => {
@@ -42,7 +42,7 @@ test('an explicit application/json is the same identity as the default', async t
   const c = await io.get(url, null, {headers: {Accept: 'application/json'}});
   t.equal(calls, 1, 'a header-spelled accept hits the same cache entry');
   t.deepEqual(c, a, 'served from the cache');
-  reset();
+  await reset();
 });
 
 test('a response Vary mismatch is a cache miss', async t => {
@@ -63,7 +63,7 @@ test('a response Vary mismatch is a cache miss', async t => {
   const a2 = await io.get(url, null, {headers: {'x-tenant': 'a'}});
   t.equal(calls, 3, 'one variant per key: the overwritten tenant refetches');
   t.deepEqual(a2, {tenant: 'a'}, 'refetched, not mis-served');
-  reset();
+  await reset();
 });
 
 test('Vary: * is never stored', async t => {
@@ -73,7 +73,7 @@ test('Vary: * is never stored', async t => {
   await io.get(url);
   await io.get(url);
   t.equal(calls, 2, 'every request goes to the network');
-  reset();
+  await reset();
 });
 
 test('removing an exact URL evicts all of its accept variants', async t => {
@@ -87,7 +87,7 @@ test('removing an exact URL evicts all of its accept variants', async t => {
   await io.get(url);
   await io.get(url, null, {accept: 'text/x-alt'});
   t.equal(calls, 4, 'both variants were evicted');
-  reset();
+  await reset();
 });
 
 test('a custom decode opts out of dedup; the cache stays byte-level', async t => {
@@ -102,7 +102,7 @@ test('a custom decode opts out of dedup; the cache stays byte-level', async t =>
   const c = await io.get(url, null, {decode: 'text'});
   t.equal(calls, 2, 'the cache serves stored bytes to any decode');
   t.equal(typeof c, 'string', 'decoded per request from the same bytes');
-  reset();
+  await reset();
 });
 
 test('adopt seeds the variant its target names', async t => {
@@ -117,5 +117,5 @@ test('adopt seeds the variant its target names', async t => {
   const plain = await io.get(url);
   t.equal(calls, 1, 'the default representation is a different identity — fetched');
   t.deepEqual(plain, {from: 'network', n: 1}, 'network body');
-  reset();
+  await reset();
 });
