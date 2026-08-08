@@ -52,6 +52,7 @@ export const installHelpers = io => {
       const pageLimit = options && options.page && options.page.limit;
       const visited = new Set();
       let lastCursor;
+      let lastOffset;
       let env = await io.full.get(base, data, options);
       if (env.response.url) visited.add(env.response.url);
       for (;;) {
@@ -108,6 +109,12 @@ export const installHelpers = io => {
           const offset = page.offset + items.length;
           if (typeof page.total === 'number' && offset >= page.total) return;
           if (typeof page.limit === 'number' && items.length < page.limit) return; // a short page is the last
+          // the next offset comes from the server's echo, so only a monotonicity check locally
+          // guarantees progress — the links and cursor arms guard the same way
+          if (lastOffset != null && offset <= lastOffset) {
+            throw new io.FailedIO('io.paginate: the offset repeats a page', env.response, options);
+          }
+          lastOffset = offset;
           env = await followQuery({...originalQuery, offset});
         } else {
           // a bare array (or an envelope without paging fields): header links only

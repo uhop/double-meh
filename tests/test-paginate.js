@@ -138,6 +138,41 @@ test('paginate: a repeating next link throws instead of looping', async t => {
   await reset();
 });
 
+test('paginate: a repeating cursor throws instead of looping', async t => {
+  let calls = 0;
+  serve(() => {
+    ++calls;
+    return json({data: [{n: 0}], limit: 1, cursor: 'stuck'});
+  });
+  try {
+    for await (const row of io.paginate('https://example.com/stuck-cursor')) void row;
+    t.fail('a cursor that never changes should throw');
+  } catch (error) {
+    t.ok(error instanceof io.FailedIO, 'FailedIO on a cursor loop');
+    t.ok(/cursor repeats/.test(error.message), 'naming the cursor');
+    t.equal(calls, 2, 'caught on the second page, not after an unbounded walk');
+  }
+  await reset();
+});
+
+// the shape a server produces when it ignores an offset parameter it does not recognize
+test('paginate: an offset that never advances throws instead of looping', async t => {
+  let calls = 0;
+  serve(() => {
+    ++calls;
+    return json({data: [{n: 0}, {n: 1}], offset: 0, limit: 2});
+  });
+  try {
+    for await (const row of io.paginate('https://example.com/stuck-offset')) void row;
+    t.fail('a non-advancing offset should throw');
+  } catch (error) {
+    t.ok(error instanceof io.FailedIO, 'FailedIO on an offset loop');
+    t.ok(/offset repeats/.test(error.message), 'naming the offset');
+    t.equal(calls, 2, 'caught on the second page, not after an unbounded walk');
+  }
+  await reset();
+});
+
 test('paginate: a non-list response throws FailedIO', async t => {
   serve(() => json({nope: true}));
   try {

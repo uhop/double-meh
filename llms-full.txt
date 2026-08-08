@@ -187,7 +187,10 @@ Semantics worth knowing:
 ## Helpers
 
 - `io.update<T>(target, fn, options?)` -> `Promise<T>` — read, apply `fn`, conditional PUT; a 412 re-reads and retries. `UpdateFn<T>` may return `undefined` to abort the write.
-- `io.paginate<T>(url, data?, options?)` -> `AsyncIterableIterator<T>` — iterates rows across pages.
+- `io.paginate<T>(url, data?, options?)` -> `AsyncIterableIterator<T>` — iterates rows across pages. Four
+  shapes, tried in order per response — body `links`, `cursor`, numeric `offset`, then `Link`-header
+  arrays — so an envelope carrying two signals is paged by the first. A continuation that repeats a
+  page (self-referential `next`, stuck cursor, non-advancing `offset`) throws `FailedIO`.
 - `io.getByIds<T>(url, ids, options?)` -> `Promise<T>` — built GETs longer than `io.getByIds.urlLimit` (default 2000) fall back to a POST body.
 - `io.adopt(target, responseOrPromise)` -> `Promise<Envelope>` — adopt an in-flight or completed `Response` into the pipeline.
 - `io.run<T>(target)` -> `Promise<Envelope<T>>` — the raw pipeline run, bypassing option defaults.
