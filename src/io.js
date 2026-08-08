@@ -117,6 +117,9 @@ const abortError = signal =>
     ? signal.reason
     : new DOMException('This operation was aborted', 'AbortError');
 
+const timedOutNotAborted = ctx =>
+  !!(ctx.timeoutSignal && ctx.timeoutSignal.aborted) && !(ctx.userSignal && ctx.userSignal.aborted);
+
 export const createIO = () => {
   const io = /** @type {any} */ (
     (url, data, opts) => run(assemble(url, data, opts)).then(envelope => envelope.data)
@@ -401,13 +404,7 @@ export const createIO = () => {
   };
 
   const mapError = (error, ctx, response) => {
-    if (
-      ctx.timeoutSignal &&
-      ctx.timeoutSignal.aborted &&
-      !(ctx.userSignal && ctx.userSignal.aborted)
-    ) {
-      return new TimedOut(response, ctx.options, {cause: error});
-    }
+    if (timedOutNotAborted(ctx)) return new TimedOut(response, ctx.options, {cause: error});
     if (isAbort(error) || (ctx.userSignal && ctx.userSignal.aborted)) return error;
     if (error instanceof IOError) return error;
     return new FailedIO((error && error.message) || 'Failed I/O', response, ctx.options, {
@@ -458,7 +455,7 @@ export const createIO = () => {
   };
 
   const callerAbortError = ctx =>
-    ctx.timeoutSignal && ctx.timeoutSignal.aborted && !(ctx.userSignal && ctx.userSignal.aborted)
+    timedOutNotAborted(ctx)
       ? new TimedOut(undefined, ctx.options, {cause: ctx.options.signal.reason})
       : abortError(ctx.options.signal);
 
