@@ -126,6 +126,9 @@ feature parity map is in the wiki:
 
 - 1.0.0 _The initial release._
 
+See the [release notes](https://github.com/uhop/double-meh/wiki/Release-notes) for the long-form
+history.
+
 ## License
 
 BSD-3-Clause © [Eugene Lazutkin](https://www.lazutkin.com/)
