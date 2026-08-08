@@ -46,3 +46,24 @@ test('createIO() gives a bare pipeline', t => {
   t.equal(bare.services.length, 0, 'no services attached');
   t.equal(bare.track, undefined, 'no track service');
 });
+
+test('io.attach() keeps services priority-sorted with ties in attach order', t => {
+  const bare = createIO();
+  const attach = (name, priority) => bare.attach({name, priority, handle: () => undefined});
+  const names = () => bare.services.map(service => service.name);
+
+  attach('c', 50);
+  attach('a', 20);
+  attach('b', 30);
+  t.deepEqual(names(), ['a', 'b', 'c'], 'ascending priority regardless of attach order');
+
+  attach('b2', 30);
+  attach('b3', 30);
+  t.deepEqual(names(), ['a', 'b', 'b2', 'b3', 'c'], 'equal priorities keep attach order');
+
+  attach('b', 30);
+  t.deepEqual(names(), ['a', 'b2', 'b3', 'b', 'c'], 're-attach by name detaches, then lands last');
+
+  bare.detach('b2');
+  t.deepEqual(names(), ['a', 'b3', 'b', 'c'], 'detach removes by name');
+});

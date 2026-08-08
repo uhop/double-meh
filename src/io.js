@@ -120,6 +120,18 @@ const abortError = signal =>
 const timedOutNotAborted = ctx =>
   !!(ctx.timeoutSignal && ctx.timeoutSignal.aborted) && !(ctx.userSignal && ctx.userSignal.aborted);
 
+// upper bound (nano-binary-search `insert`): an equal priority attaches after its peers
+const insertByPriority = (services, service) => {
+  let l = 0,
+    r = services.length;
+  while (l < r) {
+    const m = l + Math.floor((r - l) / 2);
+    if (services[m].priority <= service.priority) l = m + 1;
+    else r = m;
+  }
+  services.splice(l, 0, service);
+};
+
 export const createIO = () => {
   const io = /** @type {any} */ (
     (url, data, opts) => run(assemble(url, data, opts)).then(envelope => envelope.data)
@@ -216,8 +228,7 @@ export const createIO = () => {
 
   io.attach = service => {
     io.detach(service.name);
-    io.services.push(service);
-    io.services.sort((a, b) => a.priority - b.priority);
+    insertByPriority(io.services, service);
     return io;
   };
 
