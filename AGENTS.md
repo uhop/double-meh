@@ -67,6 +67,7 @@ double-meh/
 - Semicolons are enforced by Prettier (default `semi: true`).
 - **No JSDoc in `.js` files** — each module's `.d.ts` sidecar is the sole source of truth for types and docs, and every `src/*.js` carries `// @ts-self-types="./<file>.d.ts"` at the top. Inline `/** @type {...} */` casts needed by `js-check` are tooling, not docs, and are fine.
 - **Comments are short _why_-markers only** — a non-trivial decision or constraint, an algorithm reference, or a footgun/ordering caveat backed by a real reason. Never narrate _what_ the code does; longer explanations go to `dev-docs/` or the wiki.
+- **Nullish guards:** loose `x != null` when both nullish states mean "absent" (it is exactly `!== null && !== undefined`, and TypeScript narrows on it); strict `x !== null` **only** where `null` and `undefined` differ in meaning — the sole cases are `cache.js`'s three-state `vary`. When a `typeof x === 'object'` conjunct already excludes the falsy scalars, drop to truthiness and fold the parent guard into optional chaining (`page?.links && typeof page.links === 'object'`) — but not in a predicate's **return** position, where the truthy form returns `0`/`''`/`NaN` instead of `false`.
 - The npm package name is `double-meh`.
 
 ## Critical rules

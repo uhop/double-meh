@@ -124,6 +124,7 @@ feature parity map is in the wiki:
 
 ## Release history
 
+- 1.1.1 _`io.paginate` no longer loops forever when a server's `offset` fails to advance._
 - 1.1.0 _Streamed bundles: `io.bundle.streaming` resolves each waiter as its part arrives._
 - 1.0.0 _The initial release._
 
