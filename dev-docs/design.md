@@ -19,7 +19,7 @@ It supersedes three of Eugene's older, XHR-era packages and merges their ideas o
 - `heya/io-node` (1.3.0) — the Node transport: streaming, transparent compression.
 - `heya/bundler` (1.1.4) — the Express endpoint for the bundle protocol.
 
-The article [`web-apps-client-server-api-design-v2`](../../articles/design/web-apps-client-server-api-design-v2.md)
+The article [`web-apps-client-server-api-design`](../../articles/design/web-apps-client-server-api-design.md)
 is the design north star. `heya/io` was that paper's _browser_ client (the article cites it for
 application-level caching); `dynamodb-toolkit` is the same paper applied _server-side_. `double-meh`
 is the article's client, modernized — built to **produce and consume** the request/response shapes
