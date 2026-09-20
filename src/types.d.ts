@@ -274,6 +274,7 @@ export interface Track {
   theDefault: ServiceDefault;
   deferred: Record<string, Deferred<Envelope>>;
   flyByKey(key: string): Deferred<Envelope>;
+  /** Reserves a key so no request fires for it: the response arrives by another route, through `adopt`. Any verb. */
   fly(options: Target): Deferred<Envelope>;
   isFlying(options: Target): Deferred<Envelope> | undefined;
   optIn(options: Options): boolean;
@@ -444,6 +445,7 @@ export interface IO extends Verbs {
   paginate<T = unknown>(url: Target, data?: unknown, options?: Overrides): AsyncIterableIterator<T>;
   getByIds: GetByIds;
   encoders: CompressionEncoders;
+  /** Fulfills a key from a response obtained elsewhere. Honored for any verb, consumed once; only a GET is cached. */
   adopt(options: Target, source: Promise<Response> | Response): Promise<Envelope>;
   toEnvelope(response: Response, options: Target): Promise<Envelope>;
   run<T = unknown>(options: Target): Promise<Envelope<T>>;

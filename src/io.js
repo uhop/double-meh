@@ -523,9 +523,18 @@ export const createIO = () => {
     };
     const track = io.track;
     const wait = options.track === 'wait';
-    const opted = track && track.active && track.optIn(options);
+    // a key reserved by fly() or already adopted is an explicit statement about this exact
+    // request, so it is honored whatever the verb; optIn's GET rule guards inferred sharing
+    const claimed =
+      !!track &&
+      track.active &&
+      options.track !== false &&
+      !options.stream &&
+      options.decode === undefined &&
+      !!track.deferred[ctx.key];
+    const opted = claimed || (track && track.active && track.optIn(options));
     if (wait && !opted) {
-      throw new TypeError("io: track 'wait' requires a trackable GET request");
+      throw new TypeError("io: track 'wait' requires a trackable GET or a reserved key");
     }
     if (opted) {
       if (options.signal && options.signal.aborted) {

@@ -161,3 +161,54 @@ test('fly holds the key: no request fires, and a later adopt delivers it', async
   t.deepEqual(b, {from: 'elsewhere'}, 'the second waiter shared it');
   await reset();
 });
+
+test('an adopted key is honored whatever the verb', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+  const url = 'https://example.com/verb-put';
+  io.adopt({method: 'PUT', url}, json({from: 'prelude'}));
+  const data = await io.put({url}, {layout: 'compact'});
+  t.equal(calls, 0, 'the PUT resolved from the hand-over');
+  t.deepEqual(data, {from: 'prelude'}, 'the adopted body came through');
+  await reset();
+});
+
+test('a reserved POST waits for its delivery instead of requesting', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+  const url = 'https://example.com/verb-post';
+  io.track.fly({method: 'POST', url});
+  setTimeout(() => io.adopt({method: 'POST', url}, json({from: 'elsewhere'})), 5);
+  const data = await io.post({url}, {x: 1});
+  t.equal(calls, 0, 'no request fired for the reserved key');
+  t.deepEqual(data, {from: 'elsewhere'}, 'the late delivery resolved the POST');
+  await reset();
+});
+
+test('an unreserved non-GET is never shared', async t => {
+  let calls = 0;
+  serve(() => json({n: ++calls}));
+  const url = 'https://example.com/verb-unreserved';
+  const [a, b] = await Promise.all([io.post({url}, {x: 1}), io.post({url}, {x: 2})]);
+  t.equal(calls, 2, 'two concurrent POSTs stay two requests');
+  t.deepEqual([a, b], [{n: 1}, {n: 2}], 'each caller got its own response');
+  await reset();
+});
+
+test('a hand-over is consumed once, and the method is part of the key', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+  const once = 'https://example.com/verb-once';
+  io.adopt({method: 'PUT', url: once}, json({from: 'prelude'}));
+  t.deepEqual(await io.put({url: once}, {x: 1}), {from: 'prelude'}, 'the first call is adopted');
+  t.deepEqual(await io.put({url: once}, {x: 2}), {from: 'network', n: 1}, 'the second requests');
+
+  const cross = 'https://example.com/verb-cross';
+  io.adopt(cross, json({from: 'get-prelude'}));
+  t.deepEqual(
+    await io.put({url: cross}, {x: 1}),
+    {from: 'network', n: 2},
+    'a GET key is not a PUT key'
+  );
+  await reset();
+});

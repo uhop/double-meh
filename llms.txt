@@ -84,6 +84,7 @@ Response-level middleware in a priority onion; each opts in per request (its own
 `theDefault` (boolean or predicate). Cache and track are on by default for plain GETs.
 
 - `io.track` — run-level GET dedup at the decoded-envelope level, plus `adopt`. Cancellation is refcounted: a caller's abort detaches only that caller; the wire aborts when the last waiter leaves.
+- A key reserved by `io.track.fly(target)` or already handed to `io.adopt(target, source)` is honored whatever the verb: the GET-only rule in `track.optIn` governs inferred dedup, not an explicit reservation, so a code-forward `POST`/`PUT`/`QUERY` hand-over resolves the application's matching call. Unreserved non-GET calls are never shared, the entry is consumed once, and only a GET hand-over is cached.
 - `io.cache` — app-governed cache: `storage`, `defaultTtl`, `remove(pattern)`, `clear()`, `sweep()`, `save()`, `idle()`. Honors `Vary`, revalidates with 304.
 - `io.retry` — verb-safety-aware: `retries`, `initDelay`, `maxDelay`, `nextDelay()`.
 - `io.mock(matcher, callback)` — serverless mocking through the real pipeline, so a mocked 503 really gets retried.

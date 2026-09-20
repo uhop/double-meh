@@ -211,7 +211,9 @@ default for plain GETs. All expose `attach()` / `detach()`.
 ### io.track — run-level GET dedup
 
 Dedup at the decoded-envelope level (decode once, share the result), keyed by the canonical
-`makeKey`; streams are skipped. `track: 'wait'` registers interest without firing. Cancellation is
+`makeKey`; streams are skipped. `track: 'wait'` registers interest without firing. `optIn`'s
+GET-only rule governs inferred dedup; a key explicitly reserved by `fly` or adopted by `adopt` is
+honored for any verb, consumed once, and (being a non-GET) delivered without being cached. Cancellation is
 refcounted: a caller's abort detaches only that caller, rejecting with its own error; the wire
 aborts when the last waiter leaves, and a signalless caller pins it to completion.
 
@@ -364,7 +366,9 @@ Page half of the Service Worker contract, pairing with the `double-meh-sw` sibli
 
 `installCodeForward(io)` (already applied to the default instance) adopts requests fired by a
 `__doubleMeh` prelude in the page `<head>` — network work starts before the library finishes
-loading, and the library picks those responses up rather than refetching.
+loading, and the library picks those responses up rather than refetching. Any verb works: the
+prelude can `POST` a search or `PUT` a bundle request and the application's matching call resolves
+from it, which is the capability `<link rel="preload">` cannot offer.
 
 ## Common patterns
 
