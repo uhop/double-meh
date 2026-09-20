@@ -31,7 +31,7 @@ subpath imports carry the `.js` extension.
 - `double-meh/io.js` — `createIO()`, the bare pipeline with no services attached.
 - `double-meh/transports/fetch.js` — `fetchTransport`, the one core transport.
 - `double-meh/services/{track,cache,retry,mock,bundle}.js` — `installTrack`, `installCache`, `installRetry`, `installMock`, `installBundle`.
-- `double-meh/storage/{memory,fs,sqlite,cache-api}.js` — cache backends: `memoryStorage`, `fsStorage`, `sqliteStorage`, `cacheApiStorage`.
+- `double-meh/storage/{memory,fs,sqlite,cache-api,indexed-db}.js` — cache backends: `memoryStorage`, `fsStorage`, `sqliteStorage`, `cacheApiStorage`, `indexedDbStorage`.
 - `double-meh/encoders/zlib.js` — `installZlibEncoders` plus `gzipEncoder`, `deflateEncoder`, `brotliEncoder`, `zstdEncoder` (br/zstd via `node:zlib`, kept out of browser bundles).
 - `double-meh/sw.js` — `installSW`, `installChannel`, `SHARED_CACHE`, `CHANNEL` (page half of the Service Worker contract). On `{transport: 'sw'}`, `io.stream.*` negotiates a transferred `ReadableStream` body; other shapes keep the buffered default. URLs cross absolute — the worker cannot resolve a page-relative one.
 

@@ -121,6 +121,7 @@ import {installCache} from 'double-meh/services/cache.js';
 import {fsStorage} from 'double-meh/storage/fs.js';
 import {sqliteStorage} from 'double-meh/storage/sqlite.js';
 import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
+import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
 
 // CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
 import {installZlibEncoders} from 'double-meh/encoders/zlib.js';

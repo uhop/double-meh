@@ -38,6 +38,7 @@ import {installCache} from 'double-meh/services/cache.js';
 import {fsStorage} from 'double-meh/storage/fs.js';
 import {sqliteStorage} from 'double-meh/storage/sqlite.js';
 import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
+import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
 
 // CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
 import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
@@ -226,7 +227,9 @@ TTL plus 304 revalidation. Entries snapshot the request-header values named by t
 
 Backends: `memoryStorage` (default, per instance), `fsStorage` (one file per entry in the OS cache
 dir, atomic temp+rename), `sqliteStorage` (feature-detected `node:sqlite` / `bun:sqlite`, not Deno;
-async factory), `cacheApiStorage` (browser Cache API, metadata as synthetic `x-io-*` headers).
+async factory), `cacheApiStorage` (browser Cache API, metadata as synthetic `x-io-*` headers), and
+`indexedDbStorage` (browsers; structured clone stores the entry verbatim, so no encoding and no
+`Infinity` sentinel, and `keys()` is one `getAllKeys()`).
 `double-meh/storage/cache-dir.js` exports `osCacheDir` and `appCacheDir` (XDG, `~/Library/Caches`,
 `%LOCALAPPDATA%`).
 
