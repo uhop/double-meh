@@ -228,8 +228,8 @@ aborts when the last waiter leaves, and a signalless caller pins it to completio
 `io.cache.storage` defaults to `autoStorage(defaultCandidates)` from `src/storage/candidates.js`:
 in a browser IndexedDB, then the Cache API, then `sessionStorage`, then memory, each dynamically
 imported only if reached and trial-written (`set`/`get`/`keys`/`delete`) before it is accepted;
-outside a browser, memory alone. The browser tier is gated on `window` + `window.document`, not on
-API presence, because Node 26 exposes a process-global `sessionStorage` and Deno exposes `caches`
+outside a browser, memory alone. Every browser API is reached as `window.indexedDB` / `window.caches` /
+`window.sessionStorage`, so `window` is both the accessor and the gate, because Node 26 exposes a process-global `sessionStorage` and Deno exposes `caches`
 and (with `--location`) Web Storage -- a presence check hands a CLI a store every instance in the
 process shares. Resolution is lazy and memoized on first cached request; it sets `io.cache.backend`
 to the rung's function name and emits `cache-backend` `{backend, index, storage}`. The rungs are

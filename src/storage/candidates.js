@@ -2,27 +2,24 @@
 // Loaded on demand: the ladder imports only the rung that wins, so a page that never caches --
 // or lands on the first rung, which is every modern browser -- pays for nothing else.
 
-// The browser tier is gated on `window` rather than on each API being present, because presence
-// is not the question. Node 26 exposes a process-global `sessionStorage`, and Deno exposes
-// `caches` and (with --location) Web Storage, so a per-API check hands a CLI a store every
-// instance in the process shares. A worker has the APIs and no `window`; set io.cache.storage
-// explicitly there.
-const inBrowser = () => typeof window !== 'undefined' && typeof window.document !== 'undefined';
-
+// Every browser API is reached through `window`, which is the gate as well as the accessor: no
+// CLI runtime defines it (checked on Node 26, Bun and Deno), and a worker has `self` instead, so
+// a store that would be process-wide can never be picked by accident. Node exposes a global
+// `sessionStorage` and Deno exposes `caches`, both of which a bare `typeof` check would accept.
 const indexedDb = async () => {
-  if (!inBrowser() || typeof indexedDB === 'undefined') return undefined;
+  if (typeof window === 'undefined' || !window.indexedDB) return undefined;
   const {indexedDbStorage} = await import('./indexed-db.js');
   return indexedDbStorage();
 };
 
 const cacheApi = async () => {
-  if (!inBrowser() || typeof caches === 'undefined') return undefined;
+  if (typeof window === 'undefined' || !window.caches) return undefined;
   const {cacheApiStorage} = await import('./cache-api.js');
   return cacheApiStorage();
 };
 
 const sessionStorage = async () => {
-  if (!inBrowser() || typeof globalThis.sessionStorage === 'undefined') return undefined;
+  if (typeof window === 'undefined' || !window.sessionStorage) return undefined;
   const {webStorage} = await import('./web-storage.js');
   return webStorage();
 };

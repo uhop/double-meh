@@ -147,7 +147,7 @@ test('the default cache storage is the ladder, and it reports its choice', async
   t.equal(seen.length, 1, 'the choice was announced once');
   t.equal(seen[0].backend, dm.cache.backend, 'the event and the property agree');
 
-  const browser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+  const browser = typeof window !== 'undefined';
   t.equal(
     seen[0].backend,
     browser ? 'indexedDb' : 'memory',
@@ -168,7 +168,7 @@ test('the default cache storage is the ladder, and it reports its choice', async
 test('the browser tier is skipped where a store would be process-wide', async t => {
   // Node 26 exposes a process-global sessionStorage and Deno exposes caches, so presence alone
   // would hand a CLI a store every instance in the process shares
-  const browser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+  const browser = typeof window !== 'undefined';
   const picks = [];
   for (const candidate of defaultCandidates) picks.push(await candidate());
   const chosenNames = defaultCandidates

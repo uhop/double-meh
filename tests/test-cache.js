@@ -142,3 +142,48 @@ test('a bodyless status round-trips instead of crashing the Response constructor
     await reset();
   }
 });
+
+test('prefix eviction is literal, and a boundary group is how a hierarchy is cleared', async t => {
+  const base = 'https://example.com/hier';
+  const urls = ['/users/1', '/users/1/posts', '/users/1/posts/9', '/users/12', '/users/2'];
+  const seed = async () => {
+    serve(() => json({ok: true}));
+    for (const path of urls) await io.get(base + path);
+    await io.cache.idle();
+  };
+  const left = async () =>
+    (await io.cache.storage.keys()).map(key => key.replace('GET ' + base, '')).sort();
+
+  await seed();
+  await io.cache.remove(base + '/users/1*');
+  t.deepEqual(await left(), ['/users/2'], 'a literal prefix also takes /users/12');
+  await reset();
+
+  await seed();
+  await io.cache.remove(base + '/users/1/*');
+  t.deepEqual(
+    await left(),
+    ['/users/1', '/users/12', '/users/2'],
+    'a trailing slash takes the sub-resources and leaves the resource'
+  );
+  await reset();
+
+  await seed();
+  await io.cache.remove(base + '/users/1');
+  await io.cache.remove(base + '/users/1/*');
+  t.deepEqual(
+    await left(),
+    ['/users/12', '/users/2'],
+    'the two-call form takes the resource and its sub-resources'
+  );
+  await reset();
+
+  await seed();
+  await io.cache.remove(/^GET .*\/hier\/users\/1(\/|\?|$)/);
+  t.deepEqual(
+    await left(),
+    ['/users/12', '/users/2'],
+    'a boundary group takes the resource and its sub-resources, and nothing else'
+  );
+  await reset();
+});
