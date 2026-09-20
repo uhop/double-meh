@@ -1,7 +1,6 @@
 import test from 'tape-six';
 
-import {io, json} from './helper.js';
-import {memoryStorage} from '../src/storage/memory.js';
+import {io, isolated, json} from './helper.js';
 import {makeWorker, makeContainer, tick} from './helper-sw.js';
 import {installChannel, installSW} from '../src/sw.js';
 
@@ -11,14 +10,9 @@ const hasBC = typeof BroadcastChannel !== 'undefined';
 let counter = 0;
 const uniqueName = () => 'io-test-' + Date.now().toString(36) + '-' + ++counter;
 
-// the default cache store is origin-scoped and shared by every instance, which is what makes it
-// survive a navigation; these tests are about the channel's key-space, so each instance gets its
-// own store and eviction stays attributable
-const instance = () => {
-  const dm = io.create();
-  dm.cache.storage = memoryStorage();
-  return dm;
-};
+// these tests are about the channel's key-space, so each instance needs a store of its own for
+// eviction to stay attributable; helper.isolated does that
+const instance = isolated;
 
 const seed = async (dm, url, options) => {
   await dm.get(url, null, options);

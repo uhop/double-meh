@@ -51,7 +51,10 @@ export const installBundle = io => {
     maxSize: bundler.maxSize ?? io.bundle.maxSize,
     minSize: bundler.minSize ?? io.bundle.minSize,
     maxWait: bundler.maxWait ?? io.bundle.maxWait,
-    streaming: bundler.streaming ?? io.bundle.streaming
+    streaming: bundler.streaming ?? io.bundle.streaming,
+    // per bundler, because what an endpoint and the hops in front of it accept is a property of
+    // that deployment, not of the page
+    method: bundler.method ?? io.bundle.method
   });
 
   const selectBundler = url => {
@@ -132,7 +135,7 @@ export const installBundle = io => {
         cfg.url,
         {v: 1, parts: buildParts(waiters)},
         {
-          method: io.bundle.method,
+          method: cfg.method,
           bundle: false,
           cache: false,
           accept: BUNDLE_MIME,
@@ -153,7 +156,7 @@ export const installBundle = io => {
         cfg.url,
         {v: 1, parts: buildParts(waiters)},
         {
-          method: io.bundle.method,
+          method: cfg.method,
           bundle: false,
           cache: false,
           stream: true,

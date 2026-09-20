@@ -1,6 +1,6 @@
 import test from 'tape-six';
 
-import {io, json, serve, reset} from './helper.js';
+import {io, isolated, json, serve, reset} from './helper.js';
 import {BUNDLE_MIME, BUNDLE_JSONL_MIME} from '../src/services/bundle.js';
 import {SHARED_CACHE} from '../src/sw.js';
 
@@ -675,4 +675,31 @@ test('bundle: the envelope verb is an option, defaulting to PUT', async t => {
     io.bundle.url = '';
     await reset();
   }
+
+  // a registered bundler carries its own verb; a fresh instance keeps the registration local,
+  // the way the select-by-match test does
+  const dm = isolated();
+  const perBundler = [];
+  dm.mock(
+    () => true,
+    request => {
+      perBundler.push(request.method);
+      return bundleResponse(
+        JSON.parse(request.body).parts.map(part => ({
+          id: part.id,
+          url: part.url,
+          status: 200,
+          headers: {'content-type': 'application/json'},
+          body: DATA[new URL(part.url).pathname]
+        }))
+      );
+    }
+  );
+  dm.bundle.register({url: BASE + '/api-bundle', match: BASE + '/', method: 'QUERY'});
+  await Promise.all([
+    dm.get(BASE + '/a', null, {bundle: true}),
+    dm.get(BASE + '/b', null, {bundle: true})
+  ]);
+  t.deepEqual(perBundler, ['QUERY'], 'a registered bundler carries its own verb');
+  t.equal(dm.bundle.method, 'PUT', 'while the global default is untouched');
 });

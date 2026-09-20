@@ -9,6 +9,18 @@ io.cache.storage = memoryStorage();
 
 export {io};
 
+/**
+ * A second instance with a cache of its own. The default store is origin-scoped and shared by
+ * every instance in the page, which is what lets it survive a navigation and what makes a bare
+ * io.create() start warm in a test: entries another test left behind answer its requests before
+ * any transport is reached. Use this wherever a test asserts that a request was made.
+ */
+export const isolated = () => {
+  const dm = io.create();
+  dm.cache.storage = memoryStorage();
+  return dm;
+};
+
 export const json = (data, init = {}) =>
   new Response(data === undefined ? null : JSON.stringify(data), {
     status: init.status || 200,

@@ -365,6 +365,8 @@ export interface Mock {
 
 export interface BundlerConfig {
   url: string;
+  /** The envelope's verb for this bundler; defaults to `io.bundle.method`. */
+  method?: string;
   match?: string | RegExp | ((url: string) => boolean);
   waitTime?: number;
   maxSize?: number;
