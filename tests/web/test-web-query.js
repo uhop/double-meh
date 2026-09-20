@@ -43,4 +43,8 @@ test('web: two criteria against one URL are two cache entries', async t => {
     mine.every(key => key.includes(' body=')),
     'and each key carries a body component'
   );
+
+  // this one deliberately exercises the real default ladder, so it writes to the origin's store:
+  // clear up rather than leaving entries behind for the next run
+  await io.cache.clear();
 });

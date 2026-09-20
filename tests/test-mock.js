@@ -1,5 +1,5 @@
 import test from 'tape-six';
-import io from '../src/index.js';
+import {io} from './helper.js';
 
 test('mock: an exact match returns the mocked value as JSON', async t => {
   io.mock('https://example.com/a', () => ({mocked: true}));

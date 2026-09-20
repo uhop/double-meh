@@ -7,6 +7,10 @@ import {memoryStorage} from '../src/storage/memory.js';
 // ladder is covered on its own in test-storage-auto.js.
 io.cache.storage = memoryStorage();
 
+// Import the singleton from here, never straight from ../src/index.js: the pin above is what
+// keeps one test file's entries out of another's, and a file that bypasses it gets the default
+// origin-scoped store instead. That bites only where the runner puts files in separate workers,
+// so it can pass in one browser and fail in the next.
 export {io};
 
 /**
