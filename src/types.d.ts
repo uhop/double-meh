@@ -367,6 +367,8 @@ export interface BundlerConfig {
   url: string;
   /** The envelope's verb for this bundler; defaults to `io.bundle.method`. */
   method?: string;
+  /** On a rejected envelope, send each request on its own instead of failing every caller. */
+  retryIndividually?: boolean;
   /**
    * Select by host, compared against the parsed and lower-cased `URL.host` (so the port counts).
    * Prefer this to a `match` prefix for choosing between APIs: a prefix is not a host boundary,
@@ -385,6 +387,11 @@ export interface BundlerConfig {
 export interface Bundle {
   /** The envelope's verb. Default `'PUT'`; `'QUERY'` where the edge understands it. */
   method: string;
+  /**
+   * On a rejected envelope, send each request on its own rather than failing every caller.
+   * Default `false`: a rejection means a misconfiguration, and retrying hides it.
+   */
+  retryIndividually: boolean;
   /** The default bundler endpoint; bundling is inert until set (or a bundler is registered). */
   url: string;
   /** Auto-flush window of the default (anonymous) bundle, ms. */

@@ -776,3 +776,47 @@ test('bundle: host accepts a list, and host plus match both narrow', async t => 
     'only the narrowed pair was shipped'
   );
 });
+
+test('bundle: a rejected envelope fails every caller, unless asked to retry individually', async t => {
+  const build = () => {
+    const counters = {envelopes: 0, direct: 0};
+    const dm = isolated();
+    dm.bundle.theDefault = true;
+    dm.mock(
+      () => true,
+      request => {
+        if (new URL(request.url).pathname === '/bundle') {
+          ++counters.envelopes;
+          return json({error: 'host not on my allow list'}, {status: 403});
+        }
+        ++counters.direct;
+        return json({via: 'direct', path: new URL(request.url).pathname});
+      }
+    );
+    dm.bundle.register({url: 'https://bundler.test/bundle', host: 'api.example.com'});
+    return {dm, counters};
+  };
+
+  const strict = build();
+  const settled = await Promise.allSettled([
+    strict.dm.get('https://api.example.com/a'),
+    strict.dm.get('https://api.example.com/b')
+  ]);
+  t.deepEqual(
+    settled.map(one => one.status),
+    ['rejected', 'rejected'],
+    'by default the rejection reaches every caller'
+  );
+  t.equal(strict.counters.direct, 0, 'and nothing was re-sent');
+
+  const lenient = build();
+  lenient.dm.bundle.retryIndividually = true;
+  const [a, b] = await Promise.all([
+    lenient.dm.get('https://api.example.com/a'),
+    lenient.dm.get('https://api.example.com/b')
+  ]);
+  t.deepEqual(a, {via: 'direct', path: '/a'}, 'with the option on, each request goes on its own');
+  t.deepEqual(b, {via: 'direct', path: '/b'}, 'and the second as well');
+  t.equal(lenient.counters.envelopes, 1, 'the envelope was attempted once');
+  t.equal(lenient.counters.direct, 2, 'then two individual sends');
+});

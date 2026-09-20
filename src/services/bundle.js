@@ -74,6 +74,7 @@ export const installBundle = io => {
     minSize: bundler.minSize ?? io.bundle.minSize,
     maxWait: bundler.maxWait ?? io.bundle.maxWait,
     streaming: bundler.streaming ?? io.bundle.streaming,
+    retryIndividually: bundler.retryIndividually ?? io.bundle.retryIndividually,
     // per bundler, because what an endpoint and the hops in front of it accept is a property of
     // that deployment, not of the page
     method: bundler.method ?? io.bundle.method
@@ -128,6 +129,26 @@ export const installBundle = io => {
     });
 
   // already-settled waiters are left alone, so a mid-stream failure keeps the parts that landed
+  // each request continues down its own chain, as though it had never been bundled
+  const sendIndividually = waiters => {
+    for (const waiter of waiters) {
+      Promise.resolve()
+        .then(waiter.next)
+        .then(
+          response => settle(waiter, waiter.resolve, response),
+          error => settle(waiter, waiter.reject, error)
+        );
+    }
+  };
+
+  // a rejected envelope is a misconfiguration on one side or the other: the bundler does not
+  // serve one of these URLs, or the endpoint is wrong. Off by default, because retrying hides
+  // that and asks a bundler refusing on purpose to answer the same requests one at a time.
+  const giveUp = (cfg, waiters, error) => {
+    if (!cfg.retryIndividually) return failAll(waiters, error);
+    sendIndividually(waiters.filter(waiter => !waiter.settled));
+  };
+
   const failAll = (waiters, error) => {
     for (const waiter of waiters) {
       settle(
@@ -168,7 +189,7 @@ export const installBundle = io => {
         }
       );
     } catch (error) {
-      return void failAll(waiters, error);
+      return void giveUp(cfg, waiters, error);
     }
     // matched ids were resolved by the unbundling inspector during the PUT's own finalize
     sweepUnclaimed(waiters);
@@ -192,7 +213,7 @@ export const installBundle = io => {
       );
       if (!envelope.ok) throw await parsedBadStatus(envelope, cfg.url, undefined);
     } catch (error) {
-      return void failAll(waiters, error);
+      return void giveUp(cfg, waiters, error);
     }
     const body = envelope.data;
     const streamed = body && typeof body.getReader === 'function';
@@ -219,6 +240,8 @@ export const installBundle = io => {
         if (doc && Array.isArray(doc.parts)) for (const part of doc.parts) applyPart(part);
       }
     } catch (error) {
+      // a torn or malformed stream, not a refusal: retrying one at a time would hide a protocol
+      // fault, and the parts that already landed are settled either way
       return void failAll(waiters, error);
     }
     sweepUnclaimed(waiters);
@@ -233,15 +256,8 @@ export const installBundle = io => {
     if (!waiters.length) return Promise.resolve();
     const cfg = configFor(pool.bundler);
     if (waiters.length < Math.max(Math.min(cfg.minSize, cfg.maxSize), 1)) {
-      // a degenerate bundle is not worth the round-trip: each request continues down its own chain
-      for (const waiter of waiters) {
-        Promise.resolve()
-          .then(waiter.next)
-          .then(
-            response => settle(waiter, waiter.resolve, response),
-            error => settle(waiter, waiter.reject, error)
-          );
-      }
+      // a degenerate bundle is not worth the round-trip
+      sendIndividually(waiters);
       return Promise.resolve();
     }
     const sends = [];
@@ -379,6 +395,8 @@ export const installBundle = io => {
     maxWait: 500,
     streaming: false,
     writeThrough: false,
+    // on a rejected envelope, send each request on its own instead of failing every caller
+    retryIndividually: false,
     theDefault: false,
     isActive: false,
     optIn,
