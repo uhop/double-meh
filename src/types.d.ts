@@ -457,8 +457,14 @@ export type CompressionEncoder = (
 export type CompressionEncoders = Record<string, CompressionEncoder>;
 
 export interface GetByIds {
+  /**
+   * How an id list too long for the URL is carried. `'post'` (the default) sends `{keys}` as a
+   * POST, which no cache or dedup can share; `'query'` sends the same body as a `QUERY`, which
+   * is a safe read and keyed by its body. Opt in where the server speaks QUERY.
+   */
+  overflow: 'post' | 'query';
   <T = unknown>(url: Target, ids: readonly (string | number)[], options?: Overrides): Promise<T>;
-  /** Built GETs longer than this fall back to a POST body. Default: 2000. */
+  /** Built GETs longer than this carry their ids in a body instead; see `overflow`. Default: 2000. */
   urlLimit: number;
 }
 

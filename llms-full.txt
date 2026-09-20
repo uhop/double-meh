@@ -195,7 +195,7 @@ Semantics worth knowing:
   shapes, tried in order per response — body `links`, `cursor`, numeric `offset`, then `Link`-header
   arrays — so an envelope carrying two signals is paged by the first. A continuation that repeats a
   page (self-referential `next`, stuck cursor, non-advancing `offset`) throws `FailedIO`.
-- `io.getByIds<T>(url, ids, options?)` -> `Promise<T>` — built GETs longer than `io.getByIds.urlLimit` (default 2000) fall back to a POST body.
+- `io.getByIds<T>(url, ids, options?)` -> `Promise<T>` — built GETs longer than `io.getByIds.urlLimit` (default 2000) move the id list into a `{keys: [...]}` body. `io.getByIds.overflow` picks the verb: `'post'` (default, uncacheable and never shared) or `'query'` (safe, tracked and cached, keyed by the body, so two id lists are two entries). Opt-in; no automatic substitution, and a server that does not know QUERY answers 405.
 - `io.adopt(target, responseOrPromise)` -> `Promise<Envelope>` — adopt an in-flight or completed `Response` into the pipeline.
 - `io.run<T>(target)` -> `Promise<Envelope<T>>` — the raw pipeline run, bypassing option defaults.
 - `io.toEnvelope(response, target)` -> `Promise<Envelope>`.

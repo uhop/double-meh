@@ -131,10 +131,14 @@ export const installHelpers = io => {
     const query = {...(plainObject(options && options.query) || {}), ids: ids.join(',')};
     const url = io.buildUrl({...base, ...options, query, method: 'GET'});
     if (url.length <= io.getByIds.urlLimit) return io.get(base, null, {...options, query});
-    // the id list overflows the URL: still a read, but carried in a POST body
-    return io.post(base, {keys: [...ids]}, options);
+    // the id list overflows the URL, so the read has to carry its keys in a body. QUERY says that
+    // is still a read and keeps the result cacheable and dedupable, where POST does neither; it
+    // is opt-in because the server has to speak it.
+    const method = io.getByIds.overflow === 'query' ? 'query' : 'post';
+    return io[method](base, {keys: [...ids]}, options);
   };
   io.getByIds.urlLimit = URL_LIMIT;
+  io.getByIds.overflow = 'post';
 
   return io;
 };

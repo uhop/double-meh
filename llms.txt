@@ -57,7 +57,7 @@ Return shape is chosen by the namespace, never by an option:
 
 Helpers: `io.update(target, fn)` (read -> apply -> conditional PUT, with 412 -> re-read -> retry),
 `io.paginate(url)` (row iterator across pages), `io.getByIds(url, ids)` (falls back to POST past
-`getByIds.urlLimit`, default 2000), `io.adopt(target, responseOrPromise)`, `io.run(target)`,
+`getByIds.urlLimit`, default 2000; `getByIds.overflow` is `'post'` by default or `'query'` for a cacheable overflow), `io.adopt(target, responseOrPromise)`, `io.run(target)`,
 `io.toEnvelope(response, target)`, `io.makeKey(options)`, `io.buildUrl(options)`,
 `io.makeVerb(method)`.
 
