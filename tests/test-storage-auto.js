@@ -1,7 +1,9 @@
 import test from 'tape-six';
 
+import {io} from './helper.js';
 import {autoStorage} from '../src/storage/auto.js';
 import {memoryStorage} from '../src/storage/memory.js';
+import {defaultCandidates} from '../src/storage/candidates.js';
 
 const entry = (bytes = 8) => ({
   status: 200,
@@ -132,4 +134,49 @@ test('auto storage: every method forwards to the winner', async t => {
   t.equal(winner.calls.keys, 2, 'keys forwarded');
   t.equal(winner.calls.delete, 2, 'delete forwarded');
   t.equal(winner.calls.clear, 1, 'clear forwarded');
+});
+
+test('the default cache storage is the ladder, and it reports its choice', async t => {
+  const dm = io.create();
+  const seen = [];
+  dm.on('cache-backend', event => seen.push(event));
+  t.equal(dm.cache.backend, undefined, 'nothing is probed before the cache is used');
+
+  const picked = await dm.cache.storage.chosen();
+  t.ok(picked && typeof picked.get === 'function', 'a backend was chosen');
+  t.equal(seen.length, 1, 'the choice was announced once');
+  t.equal(seen[0].backend, dm.cache.backend, 'the event and the property agree');
+
+  const browser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+  t.equal(
+    seen[0].backend,
+    browser ? 'indexedDb' : 'memory',
+    browser ? 'a browser lands on IndexedDB' : 'a CLI runtime lands on memory'
+  );
+
+  await dm.cache.storage.set('k', {
+    status: 200,
+    statusText: 'OK',
+    headers: [],
+    body: new ArrayBuffer(4),
+    expiresAt: Date.now() + 60000
+  });
+  t.ok(await dm.cache.storage.get('k'), 'and it round-trips through the ladder');
+  await dm.cache.storage.clear();
+});
+
+test('the browser tier is skipped where a store would be process-wide', async t => {
+  // Node 26 exposes a process-global sessionStorage and Deno exposes caches, so presence alone
+  // would hand a CLI a store every instance in the process shares
+  const browser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+  const picks = [];
+  for (const candidate of defaultCandidates) picks.push(await candidate());
+  const chosenNames = defaultCandidates
+    .filter((_, i) => picks[i] !== undefined)
+    .map(candidate => candidate.name);
+  if (browser) {
+    t.ok(chosenNames.includes('indexedDb'), 'a browser offers IndexedDB');
+  } else {
+    t.deepEqual(chosenNames, ['memory'], 'a CLI runtime offers memory alone');
+  }
 });

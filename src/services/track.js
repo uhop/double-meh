@@ -86,7 +86,7 @@ export const installTrack = io => {
     const entry = flyByKey(io.makeKey(options));
     entry.flying = true; // adopt fulfills the deferred; a real request must not also fire
     hold(entry, options);
-    Promise.resolve(source)
+    const work = Promise.resolve(source)
       .then(async response => {
         if (io.cache && io.cache.isActive && io.cache.optIn(options)) {
           // Deno's clone() drops synthesized headers: rebuild the copy from the original's metadata
@@ -101,6 +101,8 @@ export const installTrack = io => {
         entry.resolve(await io.toEnvelope(response, options));
       })
       .catch(entry.reject);
+    // idle() tracks writes that have begun; the save below has not, so register the whole chain
+    if (io.cache && typeof io.cache.watch === 'function') io.cache.watch(work);
     return entry.promise;
   };
 

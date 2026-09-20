@@ -1,6 +1,7 @@
 import test from 'tape-six';
 
 import {io, json} from './helper.js';
+import {memoryStorage} from '../src/storage/memory.js';
 import {makeWorker, makeContainer, tick} from './helper-sw.js';
 import {installChannel, installSW} from '../src/sw.js';
 
@@ -9,6 +10,15 @@ const hasBC = typeof BroadcastChannel !== 'undefined';
 
 let counter = 0;
 const uniqueName = () => 'io-test-' + Date.now().toString(36) + '-' + ++counter;
+
+// the default cache store is origin-scoped and shared by every instance, which is what makes it
+// survive a navigation; these tests are about the channel's key-space, so each instance gets its
+// own store and eviction stays attributable
+const instance = () => {
+  const dm = io.create();
+  dm.cache.storage = memoryStorage();
+  return dm;
+};
 
 const seed = async (dm, url, options) => {
   await dm.get(url, null, options);
@@ -28,8 +38,8 @@ const evicted = async (dm, key) => {
 
 test('channel: cross-tab invalidation without a SW', {skip: !hasBC}, async t => {
   const name = uniqueName();
-  const a = io.create();
-  const b = io.create();
+  const a = instance();
+  const b = instance();
   installChannel(a, {name, serviceWorker: null});
   installChannel(b, {name, serviceWorker: null});
   a.mock(
@@ -56,8 +66,8 @@ test('channel: cross-tab invalidation without a SW', {skip: !hasBC}, async t => 
 
 test('channel: a trailing-* prefix evicts across tabs', {skip: !hasBC}, async t => {
   const name = uniqueName();
-  const a = io.create();
-  const b = io.create();
+  const a = instance();
+  const b = instance();
   installChannel(a, {name, serviceWorker: null});
   installChannel(b, {name, serviceWorker: null});
   a.mock(
@@ -82,8 +92,8 @@ test('channel: a trailing-* prefix evicts across tabs', {skip: !hasBC}, async t 
 
 test('channel: key-space RegExp removals stay local', {skip: !hasBC}, async t => {
   const name = uniqueName();
-  const a = io.create();
-  const b = io.create();
+  const a = instance();
+  const b = instance();
   installChannel(a, {name, serviceWorker: null});
   installChannel(b, {name, serviceWorker: null});
   a.mock(
@@ -109,7 +119,7 @@ test('channel: key-space RegExp removals stay local', {skip: !hasBC}, async t =>
 
 test('channel: a connected SW is the fan-out hub', {skip: !hasBC}, async t => {
   const name = uniqueName();
-  const dm = io.create();
+  const dm = instance();
   const worker = makeWorker();
   const container = makeContainer(worker);
   installSW(dm, {serviceWorker: container});
@@ -148,7 +158,7 @@ test('channel: a connected SW is the fan-out hub', {skip: !hasBC}, async t => {
 
 test('channel: inbound eviction covers accept variants', {skip: !hasBC}, async t => {
   const name = uniqueName();
-  const dm = io.create();
+  const dm = instance();
   installChannel(dm, {name, serviceWorker: null});
   dm.mock(
     () => true,
@@ -171,8 +181,8 @@ test('channel: inbound eviction covers accept variants', {skip: !hasBC}, async t
 
 test('channel: close() detaches cleanly', {skip: !hasBC}, async t => {
   const name = uniqueName();
-  const a = io.create();
-  const b = io.create();
+  const a = instance();
+  const b = instance();
   installChannel(a, {name, serviceWorker: null});
   installChannel(b, {name, serviceWorker: null});
   a.mock(

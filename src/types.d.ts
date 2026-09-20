@@ -313,7 +313,10 @@ export interface CacheStorage {
 export type CachePattern = string | RegExp | ((key: string) => boolean);
 
 export interface Cache {
+  /** Defaults to `autoStorage(defaultCandidates)`: IndexedDB, the Cache API, `sessionStorage`, memory. */
   storage: CacheStorage;
+  /** The name of the ladder rung in use, set when the default ladder resolves. */
+  backend?: string;
   defaultTtl: number;
   /** Bodies larger than this are refused before any write, and never trigger eviction. Default: `Infinity`. */
   maxEntryBytes: number;
@@ -326,6 +329,8 @@ export interface Cache {
   clear(): Promise<IO>;
   sweep(): Promise<IO>;
   save(target: Target, response: Response, ttl?: number): Promise<IO>;
+  /** Register a promise with `idle()`, for cache work that has not reached `save` yet. */
+  watch<T>(promise: Promise<T>): Promise<T>;
   idle(): Promise<void>;
 }
 

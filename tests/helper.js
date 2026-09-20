@@ -1,4 +1,11 @@
 import io from '../src/index.js';
+import {memoryStorage} from '../src/storage/memory.js';
+
+// The default is a persistent, origin-scoped store shared by every instance in the page, which is
+// what makes it survive a navigation and what makes it useless for a test suite: entries outlive
+// a reset, and a second instance writes into the same store. Pin the suite to memory; the default
+// ladder is covered on its own in test-storage-auto.js.
+io.cache.storage = memoryStorage();
 
 export {io};
 

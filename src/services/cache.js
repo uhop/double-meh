@@ -1,7 +1,8 @@
 // @ts-self-types="./cache.d.ts"
 import {CacheFull, nullBodyStatus} from '../envelope.js';
 import {canonicalUrl} from '../key.js';
-import {memoryStorage} from '../storage/memory.js';
+import {autoStorage} from '../storage/auto.js';
+import {defaultCandidates} from '../storage/candidates.js';
 
 // null = Vary: * (uncacheable); undefined = no Vary; else the selecting request-header snapshot
 const varyOf = (response, requestHeaders) => {
@@ -58,7 +59,17 @@ const estimate = async () => {
 };
 
 export const installCache = io => {
-  const storage = memoryStorage();
+  // lazy, so a page that never caches never probes; the choice is reported both ways, because an
+  // application expecting persistence that silently lands on memory has a cold cache and no other
+  // symptom. io.cache.backend answers after the fact; the event needs a listener registered before
+  // the first cached request, which a code-forward setup callback is early enough for.
+  const storage = autoStorage(defaultCandidates, {
+    onPick: (chosen, index) => {
+      const backend = defaultCandidates[index].name || String(index);
+      io.cache.backend = backend;
+      io.emit('cache-backend', {backend, index, storage: chosen});
+    }
+  });
 
   const pending = new Set();
   const watch = promise => {
@@ -264,6 +275,8 @@ export const installCache = io => {
 
   io.cache = {
     storage,
+    /** Which rung of the default ladder won, once one has. */
+    backend: undefined,
     defaultTtl: 5 * 60 * 1000,
     maxEntryBytes: Infinity,
     theDefault: options => !options.transport,
@@ -303,6 +316,11 @@ export const installCache = io => {
           return io;
         })()
       ),
+    /**
+     * Register a promise with `idle()`. `io.adopt` uses it so that a hand-over whose save has not
+     * started yet is still waited for: `idle()` sees only work already begun otherwise.
+     */
+    watch: promise => watch(promise),
     idle: async () => {
       while (pending.size) await Promise.all([...pending]);
     }
