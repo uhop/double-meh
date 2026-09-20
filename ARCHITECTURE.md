@@ -124,6 +124,7 @@ import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
 import {webStorage} from 'double-meh/storage/web-storage.js';
 import {opfsStorage} from 'double-meh/storage/opfs.js';
+import {autoStorage} from 'double-meh/storage/auto.js'; // runtime ladder over the above
 
 // cache write refusals: io.CacheFull (explicit saves) + the 'cache-skip' event (implicit caching)
 

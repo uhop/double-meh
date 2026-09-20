@@ -41,6 +41,7 @@ import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
 import {webStorage} from 'double-meh/storage/web-storage.js';
 import {opfsStorage} from 'double-meh/storage/opfs.js';
+import {autoStorage} from 'double-meh/storage/auto.js';
 
 // CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
 import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
