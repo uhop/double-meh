@@ -32,6 +32,10 @@ npm install
 - **TypeScript tests:** `npm run ts-test` (also `ts-test:bun`, `ts-test:deno`)
 - **Lint:** `npm run lint` (Prettier check)
 - **Lint fix:** `npm run lint:fix` (Prettier write)
+- **Wiki search index:** `npm run wiki:index` — regenerates `wiki/search-index.json` from the
+  `wiki/` submodule. It is a generated artifact tracked beside the pages, so run it after any
+  wiki edit and before the wiki commit, the same way lint runs before a source commit. Skip it
+  and the index silently describes the previous version of every page you changed.
 
 ## Project structure
 
