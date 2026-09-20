@@ -17,9 +17,8 @@ export const installCodeForward = io => {
   const arrived = (target, response) => io.adopt(target, response);
 
   const pending = Array.isArray(dm.arrived) ? dm.arrived : [];
-  dm.setup?.forEach(use);
-  dm.inFlight?.forEach(fly);
-  pending.forEach(entry => arrived(entry[0], entry[1]));
+  const inFlight = Array.isArray(dm.inFlight) ? dm.inFlight : [];
+  const staged = (Array.isArray(dm.setup) ? dm.setup : []).map(use);
   delete dm.setup;
   delete dm.inFlight;
 
@@ -28,6 +27,16 @@ export const installCodeForward = io => {
   dm.fly = fly;
   dm.arrived = arrived;
 
-  io.emit('ready');
+  const drain = () => {
+    inFlight.forEach(fly);
+    pending.forEach(entry => arrived(entry[0], entry[1]));
+    io.emit('ready');
+  };
+  // a setup callback that returns a promise — importing a cache backend, say — is waited on before
+  // anything is adopted, so the hand-over lands in the store the page asked for. allSettled: a
+  // failed setup must not wedge the prefetch it was configuring.
+  const waiting = staged.filter(result => result && typeof result.then === 'function');
+  if (waiting.length) Promise.allSettled(waiting).then(drain);
+  else drain();
   return io;
 };

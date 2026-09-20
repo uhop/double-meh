@@ -65,3 +65,90 @@ test('ready event fires once on drain', async t => {
   io.off('ready', onReady);
   await cleanup();
 });
+
+// the drain itself, against a minimal io: only fly / adopt / emit are touched by installCodeForward
+const fakeIO = log => ({
+  track: {fly: target => log.push('fly:' + (target.url || target))},
+  makeKey: target => String(target.url),
+  adopt: (target, response) => {
+    log.push('adopt:' + (target.url || target));
+    return Promise.resolve(response);
+  },
+  emit: event => log.push('emit:' + event)
+});
+
+const withGlobal = async (value, body) => {
+  const saved = globalThis.__doubleMeh;
+  globalThis.__doubleMeh = value;
+  try {
+    return await body();
+  } finally {
+    globalThis.__doubleMeh = saved;
+  }
+};
+
+test('a synchronous setup drains in one turn, before anything is adopted', async t => {
+  const log = [];
+  await withGlobal(
+    {
+      setup: [() => void log.push('setup')],
+      inFlight: ['https://x/f'],
+      arrived: [[{url: 'https://x/a'}, Promise.resolve(new Response('{}'))]]
+    },
+    async () => {
+      installCodeForward(fakeIO(log));
+      t.deepEqual(
+        log,
+        ['setup', 'fly:https://x/f', 'adopt:https://x/a', 'emit:ready'],
+        'setup, then in-flight, then adoption, then ready — all synchronously'
+      );
+    }
+  );
+});
+
+test('a setup callback returning a promise is awaited before anything is adopted', async t => {
+  const log = [];
+  let release;
+  const gate = new Promise(resolve => (release = resolve));
+  await withGlobal(
+    {
+      setup: [
+        () => {
+          log.push('setup:start');
+          return gate.then(() => void log.push('setup:done'));
+        }
+      ],
+      arrived: [[{url: 'https://x/a'}, Promise.resolve(new Response('{}'))]]
+    },
+    async () => {
+      installCodeForward(fakeIO(log));
+      t.deepEqual(log, ['setup:start'], 'nothing is adopted while setup is still running');
+      release();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      t.deepEqual(
+        log,
+        ['setup:start', 'setup:done', 'adopt:https://x/a', 'emit:ready'],
+        'the hand-over lands only after setup settles'
+      );
+    }
+  );
+});
+
+test('a setup callback that rejects still lets the prefetch land', async t => {
+  const log = [];
+  await withGlobal(
+    {
+      setup: [() => Promise.reject(new Error('backend import failed'))],
+      arrived: [[{url: 'https://x/a'}, Promise.resolve(new Response('{}'))]]
+    },
+    async () => {
+      installCodeForward(fakeIO(log));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      t.deepEqual(
+        log,
+        ['adopt:https://x/a', 'emit:ready'],
+        'a failed setup does not wedge the drain'
+      );
+    }
+  );
+});

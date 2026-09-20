@@ -40,6 +40,7 @@ import {sqliteStorage} from 'double-meh/storage/sqlite.js';
 import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
 import {webStorage} from 'double-meh/storage/web-storage.js';
+import {opfsStorage} from 'double-meh/storage/opfs.js';
 
 // CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
 import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
@@ -235,7 +236,14 @@ async factory), `cacheApiStorage` (browser Cache API, metadata as synthetic `x-i
 `Infinity`; the only backend with no container, so `name` is a key prefix and `clear()`/`keys()`
 filter on it instead of calling `store.clear()`, which would wipe the origin; records carry a
 version and encoding tag and degrade to a miss when unrecognized; ~5 MB origin quota and
-synchronous main-thread access, so pair it with `io.cache.maxEntryBytes`). A backend that cannot store an entry
+synchronous main-thread access, so pair it with `io.cache.maxEntryBytes`), and `opfsStorage`
+(origin private file system; one file per entry framed as a JSON metadata line plus raw body
+bytes, as the filesystem backend does, with SHA-256 filenames and the key re-checked from the
+metadata; writes stage into a swap file and apply on `close()`; no encoding and the origin's
+storage pool, so it is the large-body backend; `keys()` must open every entry, and
+`createWritable()` on the main thread is Chrome 86 / Firefox 111 / Safari 26, so feature-detect
+before defaulting to it). Swapping a backend from a code-forward head script works because the
+drain awaits any `setup` callback that returns a promise before adopting anything. A backend that cannot store an entry
 lets its error out of `set`: the cache recognizes `QuotaExceededError` /
 `NS_ERROR_DOM_QUOTA_REACHED` / DOMException code 22 / `ENOSPC` / `SQLITE_FULL`, sweeps expired
 entries, evicts nearest-to-expiry, retries once at each step, then drops the entry. Implicit
