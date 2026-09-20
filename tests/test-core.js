@@ -248,11 +248,42 @@ test("decode: 'response' hands back the Response itself", async t => {
   await reset();
 });
 
-test("decode: 'response' still answers when there is no body", async t => {
-  serve(() => new Response(null, {status: 204, headers: {'x-trace': 'no-body'}}));
-  const response = await io.get('https://example.com/raw204', null, {decode: 'response'});
-  t.ok(response instanceof Response, 'a Response came back at 204');
-  t.equal(response.status, 204, 'the status is the point of the call');
-  t.equal(response.headers.get('x-trace'), 'no-body', 'headers are readable');
+test("decode: 'response' yields a Response wherever a decoded body would be undefined", async t => {
+  // every branch that returns undefined under a normal decode: a bodyless verb, a bodyless
+  // status, an absent body, and an error the caller chose to inspect
+  const cases = [
+    {what: 'a 204', status: 204},
+    {what: 'a 205', status: 205},
+    {what: 'a 200 with no body', status: 200},
+    {what: 'an error status', status: 404, options: {ignoreBadStatus: true}}
+  ];
+  for (const {what, status, options} of cases) {
+    serve(() => new Response(null, {status, headers: {'x-trace': what}}));
+    const response = await io.get('https://example.com/raw-' + status, null, {
+      decode: 'response',
+      ...options
+    });
+    t.ok(response instanceof Response, what + ': a Response came back');
+    t.equal(response.status, status, what + ': carrying its status');
+    t.equal(response.headers.get('x-trace'), what, what + ': and its headers');
+    await reset();
+  }
+
+  for (const verb of ['head', 'options']) {
+    serve(() => new Response(null, {status: 200, headers: {'x-trace': verb}}));
+    const envelope = await io[verb]('https://example.com/raw-' + verb, null, {
+      decode: 'response'
+    });
+    t.ok(envelope.data instanceof Response, verb + ': a bodyless verb still yields one');
+    t.equal(envelope.data.headers.get('x-trace'), verb, verb + ': with its headers');
+    await reset();
+  }
+
+  serve(() => new Response(null, {status: 204}));
+  t.equal(
+    await io.get('https://example.com/raw-control'),
+    undefined,
+    'a normal decode is unchanged: 204 is undefined'
+  );
   await reset();
 });
