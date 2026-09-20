@@ -91,9 +91,17 @@ export const fsStorage = (options = {}) => {
       } catch {}
     },
     clear: async () => {
+      const files = await list();
+      const failures = [];
       await Promise.all(
-        (await list()).map(file => fs.unlink(path.join(dir, file)).catch(() => {}))
+        files.map(file => fs.unlink(path.join(dir, file)).catch(error => void failures.push(error)))
       );
+      if (failures.length) {
+        throw new AggregateError(
+          failures,
+          'io.fsStorage.clear: ' + failures.length + ' of ' + files.length + ' entries failed'
+        );
+      }
     },
     keys: async () => {
       const result = [];

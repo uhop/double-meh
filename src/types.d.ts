@@ -306,7 +306,7 @@ export type CachePattern = string | RegExp | ((key: string) => boolean);
 export interface Cache {
   storage: CacheStorage;
   defaultTtl: number;
-  /** Bodies larger than this are never stored and never trigger eviction. Default: `Infinity`. */
+  /** Bodies larger than this are refused before any write, and never trigger eviction. Default: `Infinity`. */
   maxEntryBytes: number;
   theDefault: ServiceDefault;
   isActive: boolean;

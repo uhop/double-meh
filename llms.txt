@@ -35,7 +35,8 @@ subpath imports carry the `.js` extension.
 - `double-meh/encoders/zlib.js` — `installZlibEncoders` plus `gzipEncoder`, `deflateEncoder`, `brotliEncoder`, `zstdEncoder` (br/zstd via `node:zlib`, kept out of browser bundles).
 - `double-meh/sw.js` — `installSW`, `installChannel`, `SHARED_CACHE`, `CHANNEL` (page half of the Service Worker contract). On `{transport: 'sw'}`, `io.stream.*` negotiates a transferred `ReadableStream` body; other shapes keep the buffered default. URLs cross absolute — the worker cannot resolve a page-relative one.
 
-- `io.cache.maxEntryBytes` caps a stored body (default `Infinity`); a quota failure sweeps expired entries, then evicts nearest-to-expiry, then drops the entry. Implicit caching never fails the request and emits `cache-skip`; `io.cache.save` rejects with `io.CacheFull` (`.key`, `.reason`).
+- `io.cache.maxEntryBytes` caps a stored body (default `Infinity`); a quota failure sweeps expired entries, then evicts nearest-to-expiry, then drops the entry. Implicit caching never fails the request and emits `cache-skip`; `io.cache.save` rejects with `io.CacheFull` (`.key`, `.reason` of `quota`/`too-large`, `.name === 'QuotaExceededError'`), while a backend failing for another cause propagates unwrapped.
+- Errors combine rather than vanish: an exhausted retry throws the last error with its type intact and an `AggregateError` of the earlier attempts on the cause chain; `io.cache.sweep`/`remove` and `fsStorage.clear` finish their loop and reject with an `AggregateError` of what they could not remove.
 
 ## Core API
 

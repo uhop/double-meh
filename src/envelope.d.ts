@@ -31,13 +31,15 @@ export declare class TimedOut extends FailedIO {
 }
 
 export declare class CacheFull extends IOError {
+  /** Always `'QuotaExceededError'` — the platform's name for this condition. */
+  name: string;
   /** The cache key whose entry was refused. */
   key: string;
-  /** Why the write was refused: the store was full, the body exceeded `maxEntryBytes`, or the backend failed. */
-  reason: 'quota' | 'too-large' | 'error';
+  /** Why the write was refused: the store was out of room, or the body exceeded `maxEntryBytes`. */
+  reason: 'quota' | 'too-large';
   constructor(
     key: string,
-    reason: 'quota' | 'too-large' | 'error',
+    reason: 'quota' | 'too-large',
     options?: Options,
     errorOptions?: ErrorOptions
   );

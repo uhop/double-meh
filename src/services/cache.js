@@ -95,17 +95,23 @@ export const installCache = io => {
     return entry;
   };
 
+  // every loop below finishes what it started: a failing entry is collected, never a reason to stop
   const sweepExpired = async () => {
     const cutoff = Date.now();
+    const failures = [];
     let removed = 0;
     for (const key of await io.cache.storage.keys()) {
-      const entry = await io.cache.storage.get(key);
-      if (entry && entry.expiresAt <= cutoff) {
-        await io.cache.storage.delete(key);
-        ++removed;
+      try {
+        const entry = await io.cache.storage.get(key);
+        if (entry && entry.expiresAt <= cutoff) {
+          await io.cache.storage.delete(key);
+          ++removed;
+        }
+      } catch (error) {
+        failures.push(error);
       }
     }
-    return removed;
+    return {removed, failures};
   };
 
   // nearest-to-expiry first: a TTL cache knows when an entry dies, never when it was last read
@@ -116,34 +122,55 @@ export const installCache = io => {
       if (entry) all.push({key, expiresAt: entry.expiresAt, bytes: entry.body.byteLength});
     }
     all.sort((a, b) => a.expiresAt - b.expiresAt);
+    const failures = [];
     let freed = 0,
       removed = 0;
     for (const item of all) {
       if (freed >= needed) break;
-      await io.cache.storage.delete(item.key);
-      freed += item.bytes;
-      ++removed;
+      try {
+        await io.cache.storage.delete(item.key);
+        freed += item.bytes;
+        ++removed;
+      } catch (error) {
+        failures.push(error);
+      }
     }
-    return removed;
+    return {removed, failures};
+  };
+
+  const report = async (key, bytes, reason, error, extra) => {
+    const {quota, usage} = (await estimate()) || {};
+    io.emit('cache-skip', {key, bytes, reason, quota, usage, error, ...extra});
   };
 
   const refuse = async (key, bytes, reason, error, extra) => {
-    const {quota, usage} = (await estimate()) || {};
-    io.emit('cache-skip', {key, bytes, reason, quota, usage, error, ...extra});
+    await report(key, bytes, reason, error, extra);
     throw new CacheFull(key, reason, undefined, error ? {cause: error} : undefined);
   };
 
+  // a backend that failed for some cause of its own is reported, then propagated as itself
+  const passThrough = async (key, bytes, error, extra) => {
+    await report(key, bytes, 'error', error, extra);
+    throw error;
+  };
+
   const store = async (key, entry) => {
-    const bytes = entry.body.byteLength;
-    if (bytes > io.cache.maxEntryBytes) return refuse(key, bytes, 'too-large');
+    let bytes = 0;
     try {
+      bytes = entry.body.byteLength;
+      if (bytes > io.cache.maxEntryBytes) return await refuse(key, bytes, 'too-large');
       return await io.cache.storage.set(key, entry);
     } catch (error) {
-      if (!isQuota(error)) return refuse(key, bytes, 'error', error);
+      if (error instanceof CacheFull) throw error; // already reported
+      if (!isQuota(error)) return passThrough(key, bytes, error);
       let expired = 0,
-        evicted = 0;
+        evicted = 0,
+        partial = 0;
       try {
-        expired = await sweepExpired();
+        ({
+          removed: expired,
+          failures: {length: partial}
+        } = await sweepExpired());
         if (expired) {
           try {
             return await io.cache.storage.set(key, entry);
@@ -151,7 +178,9 @@ export const installCache = io => {
             if (!isQuota(again)) throw again;
           }
         }
-        evicted = await evictSoonest(bytes);
+        const swept = await evictSoonest(bytes);
+        evicted = swept.removed;
+        partial += swept.failures.length;
         if (evicted) {
           try {
             return await io.cache.storage.set(key, entry);
@@ -160,19 +189,17 @@ export const installCache = io => {
           }
         }
       } catch (during) {
-        return refuse(key, bytes, 'error', during, {expired, evicted});
+        return passThrough(key, bytes, during, {expired, evicted, partial});
       }
-      return refuse(key, bytes, 'quota', error, {expired, evicted});
+      return refuse(key, bytes, 'quota', error, {expired, evicted, partial});
     }
   };
 
-  // the response is already in the caller's hands: a cache that cannot store it is not their problem
+  // the response is already in the caller's hands, and store() reports every failure on 'cache-skip'
   const storeQuietly = async (key, entry) => {
     try {
       await store(key, entry);
-    } catch (error) {
-      if (!(error instanceof CacheFull)) throw error;
-    }
+    } catch {}
   };
 
   const handle = async (request, ctx, next) => {
@@ -201,9 +228,38 @@ export const installCache = io => {
 
   const keyOf = target => io.makeKey(typeof target === 'string' ? {url: target} : target);
 
+  const matcherFor = target => {
+    if (typeof target === 'function') return target;
+    if (target instanceof RegExp) return key => target.test(key);
+    const text = String(target);
+    if (text.endsWith('*')) {
+      const prefix = 'GET ' + canonicalUrl(text.slice(0, -1));
+      return key => key.startsWith(prefix);
+    }
+    // an exact URL owns all of its accept variants
+    const exact = io.makeKey({url: text});
+    return key => key === exact || key.startsWith(exact + ' accept=');
+  };
+
   const evictBy = async match => {
-    for (const key of await io.cache.storage.keys())
-      if (match(key)) await io.cache.storage.delete(key);
+    const failures = [];
+    let removed = 0;
+    for (const key of await io.cache.storage.keys()) {
+      if (!match(key)) continue;
+      try {
+        await io.cache.storage.delete(key);
+        ++removed;
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    return {removed, failures};
+  };
+
+  const orThrow = ({failures}, where) => {
+    if (failures.length) {
+      throw new AggregateError(failures, where + ': ' + failures.length + ' entries failed');
+    }
   };
 
   io.cache = {
@@ -224,19 +280,7 @@ export const installCache = io => {
       return io;
     },
     remove: async target => {
-      if (typeof target === 'function') await evictBy(target);
-      else if (target instanceof RegExp) await evictBy(key => target.test(key));
-      else {
-        const text = String(target);
-        if (text.endsWith('*')) {
-          const prefix = 'GET ' + canonicalUrl(text.slice(0, -1));
-          await evictBy(key => key.startsWith(prefix));
-        } else {
-          // an exact URL owns all of its accept variants
-          const exact = io.makeKey({url: text});
-          await evictBy(key => key === exact || key.startsWith(exact + ' accept='));
-        }
-      }
+      orThrow(await evictBy(matcherFor(target)), 'io.cache.remove');
       return io;
     },
     clear: async () => {
@@ -244,7 +288,7 @@ export const installCache = io => {
       return io;
     },
     sweep: async () => {
-      await sweepExpired();
+      orThrow(await sweepExpired(), 'io.cache.sweep');
       return io;
     },
     save: (target, response, ttl) =>

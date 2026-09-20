@@ -235,8 +235,15 @@ lets its error out of `set`: the cache recognizes `QuotaExceededError` /
 entries, evicts nearest-to-expiry, retries once at each step, then drops the entry. Implicit
 caching never fails the request and reports on the `cache-skip` event
 (`{key, bytes, reason, quota, usage, expired, evicted, error}`, `reason` one of `too-large` /
-`quota` / `error`); `io.cache.save` rejects with `io.CacheFull`. `io.cache.maxEntryBytes`
-(default `Infinity`) refuses an oversized body before any write.
+`quota` / `error`); `io.cache.save` rejects with `io.CacheFull` for the first two and propagates
+the backend's own error unwrapped for the third. `io.CacheFull.name` is `'QuotaExceededError'`,
+the platform's name for the condition, while `instanceof io.CacheFull` still discriminates.
+`io.cache.maxEntryBytes` (default `Infinity`) refuses an oversized body before any write.
+Multi-entry passes never stop on one bad entry: `io.cache.sweep`, `io.cache.remove` and
+`fsStorage.clear` complete the loop and reject with an `AggregateError` on `.errors`. An
+exhausted retry throws the final error with its type unchanged and combines the earlier attempts
+into an `AggregateError` on the cause chain (walk `.cause`; the depth varies with whether the
+outer mapping re-wrapped the final error).
 `double-meh/storage/cache-dir.js` exports `osCacheDir` and `appCacheDir` (XDG, `~/Library/Caches`,
 `%LOCALAPPDATA%`).
 

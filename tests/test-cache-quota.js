@@ -158,3 +158,78 @@ test('a non-quota backend failure is reported, not thrown at the caller', async 
   t.equal(reported.seen[0].reason, 'error', 'reported as an error, not as quota');
   t.equal(storage.state.sets, 1, 'no recovery ladder runs for a non-quota failure');
 });
+
+test('CacheFull reports the platform name for the condition', async t => {
+  const storage = rigged();
+  storage.state.fail = () => quotaError();
+  await withStorage(storage, async () => {
+    try {
+      await io.cache.save('https://example.com/q8', json({a: 1}));
+      t.fail('should have thrown');
+    } catch (error) {
+      t.equal(error.name, 'QuotaExceededError', 'name matches what a storage API would say');
+      t.ok(error instanceof io.CacheFull, 'and the class is still ours to branch on');
+      t.equal(error.constructor.name, 'CacheFull', 'the class name is unchanged');
+    }
+  });
+});
+
+test('a non-quota backend failure propagates as itself, not wrapped', async t => {
+  const storage = rigged();
+  const own = new Error('the disk is on fire');
+  storage.state.fail = () => own;
+  const reported = collect('cache-skip');
+  await withStorage(storage, async () => {
+    try {
+      await io.cache.save('https://example.com/q9', json({a: 1}));
+      t.fail('should have thrown');
+    } catch (error) {
+      t.equal(error, own, 'the backend error arrives untouched');
+      t.notOk(error instanceof io.CacheFull, 'not rewrapped in a library type');
+    }
+  });
+  reported.stop();
+  t.equal(reported.seen[0].reason, 'error', 'still reported on cache-skip');
+});
+
+test('sweep finishes the loop and aggregates what it could not remove', async t => {
+  const storage = rigged();
+  const stale = Date.now() - 1000;
+  storage.map.set('a', entryAt(stale, 8));
+  storage.map.set('bad', entryAt(stale, 8));
+  storage.map.set('c', entryAt(stale, 8));
+  const realDelete = storage.delete;
+  storage.delete = key => {
+    if (key === 'bad') throw new Error('cannot remove ' + key);
+    return realDelete(key);
+  };
+  await withStorage(storage, async () => {
+    try {
+      await io.cache.sweep();
+      t.fail('should have thrown');
+    } catch (error) {
+      t.ok(error instanceof AggregateError, 'partial failure is visible');
+      t.equal(error.errors.length, 1, 'one entry failed');
+    }
+    t.deepEqual([...storage.map.keys()], ['bad'], 'the other two were still removed');
+  });
+});
+
+test('remove finishes the loop and aggregates too', async t => {
+  const storage = rigged();
+  const live = Date.now() + 60000;
+  const key = io.makeKey({url: 'https://example.com/rm'});
+  storage.map.set(key, entryAt(live, 8));
+  storage.delete = () => {
+    throw new Error('read-only store');
+  };
+  await withStorage(storage, async () => {
+    try {
+      await io.cache.remove('https://example.com/rm');
+      t.fail('should have thrown');
+    } catch (error) {
+      t.ok(error instanceof AggregateError, 'reported as an aggregate');
+      t.equal(error.errors.length, 1, 'the one failure is carried');
+    }
+  });
+});

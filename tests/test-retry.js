@@ -144,3 +144,42 @@ test('retries are off by default (no retry option)', async t => {
   t.equal(calls, 1, 'no retry without the retry option');
   await reset();
 });
+
+// the aggregate rides on the cause chain: depth depends on whether the outer mapping re-wraps
+const aggregateIn = error => {
+  for (let cur = error; cur; cur = cur.cause) if (cur instanceof AggregateError) return cur;
+  return undefined;
+};
+
+test('an exhausted retry keeps its type and carries the earlier attempts', async t => {
+  let calls = 0;
+  serve(() => Promise.reject(new Error('boom ' + ++calls)));
+  try {
+    await io.get('https://example.com/agg', null, {retry: {retries: 2, initDelay: 0}});
+    t.fail('should have thrown');
+  } catch (e) {
+    t.equal(calls, 3, 'initial call + 2 retries');
+    t.ok(e instanceof io.FailedIO, 'the surfaced type is unchanged');
+    const all = aggregateIn(e);
+    t.ok(all instanceof AggregateError, 'the earlier attempts are on the cause chain');
+    t.equal(all.errors.length, 2, 'both earlier attempts kept');
+    t.deepEqual(
+      all.errors.map(x => x.message),
+      ['boom 1', 'boom 2'],
+      'in the order they happened'
+    );
+    t.ok(/3 attempts failed/.test(all.message), 'the message counts every attempt');
+  }
+  await reset();
+});
+
+test('a single failed attempt adds no aggregate', async t => {
+  serve(() => Promise.reject(new Error('once')));
+  try {
+    await io.get('https://example.com/agg1', null, {retry: {retries: 0, initDelay: 0}});
+    t.fail('should have thrown');
+  } catch (e) {
+    t.notOk(aggregateIn(e), 'nothing to combine, so nothing is allocated');
+  }
+  await reset();
+});

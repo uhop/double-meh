@@ -61,6 +61,7 @@ export const installRetry = io => {
     if (!cfg || isReadableStream(request.body)) return null;
     const method = (options.method || 'GET').toUpperCase();
     let delay = cfg.initDelay;
+    const earlier = [];
     for (let attempt = 0; ; ++attempt) {
       let response = null;
       let error = null;
@@ -82,9 +83,18 @@ export const installRetry = io => {
             : attempt < cfg.retries && retryableStatus(response.status);
       if (!wantMore) {
         if (response != null) return response;
+        // the type stays the caller's to branch on; the attempts it hides ride underneath
+        if (earlier.length && error && typeof error === 'object') {
+          const causes = error.cause == null ? earlier : [...earlier, error.cause];
+          error.cause = new AggregateError(
+            causes,
+            'io.retry: ' + (attempt + 1) + ' attempts failed'
+          );
+        }
         throw error;
       }
       io.emit('retry', {attempt: attempt + 1, response, error}, ctx);
+      if (error != null) earlier.push(error);
       const after = response != null ? retryAfterMs(response) : null;
       await sleep(Math.min(after != null ? after : delay, io.retry.maxDelay));
       if (request.signal && request.signal.aborted) {

@@ -132,10 +132,13 @@ export class TimedOut extends FailedIO {
   }
 }
 
-// the store would not take the entry: quota, an oversized body, or a failing backend
+// the store refused the entry: out of room, or past maxEntryBytes. A backend failing for any other
+// cause propagates as itself. The name is the platform's for this condition, so a caller already
+// branching on it for IndexedDB or Web Storage handles ours unchanged.
 export class CacheFull extends IOError {
   constructor(key, reason, options, errorOptions) {
     super('Cache full: ' + reason, options, errorOptions);
+    this.name = 'QuotaExceededError';
     this.key = key;
     this.reason = reason;
   }
