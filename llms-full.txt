@@ -229,7 +229,14 @@ Backends: `memoryStorage` (default, per instance), `fsStorage` (one file per ent
 dir, atomic temp+rename), `sqliteStorage` (feature-detected `node:sqlite` / `bun:sqlite`, not Deno;
 async factory), `cacheApiStorage` (browser Cache API, metadata as synthetic `x-io-*` headers), and
 `indexedDbStorage` (browsers; structured clone stores the entry verbatim, so no encoding and no
-`Infinity` sentinel, and `keys()` is one `getAllKeys()`).
+`Infinity` sentinel, and `keys()` is one `getAllKeys()`). A backend that cannot store an entry
+lets its error out of `set`: the cache recognizes `QuotaExceededError` /
+`NS_ERROR_DOM_QUOTA_REACHED` / DOMException code 22 / `ENOSPC` / `SQLITE_FULL`, sweeps expired
+entries, evicts nearest-to-expiry, retries once at each step, then drops the entry. Implicit
+caching never fails the request and reports on the `cache-skip` event
+(`{key, bytes, reason, quota, usage, expired, evicted, error}`, `reason` one of `too-large` /
+`quota` / `error`); `io.cache.save` rejects with `io.CacheFull`. `io.cache.maxEntryBytes`
+(default `Infinity`) refuses an oversized body before any write.
 `double-meh/storage/cache-dir.js` exports `osCacheDir` and `appCacheDir` (XDG, `~/Library/Caches`,
 `%LOCALAPPDATA%`).
 

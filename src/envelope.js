@@ -132,6 +132,15 @@ export class TimedOut extends FailedIO {
   }
 }
 
+// the store would not take the entry: quota, an oversized body, or a failing backend
+export class CacheFull extends IOError {
+  constructor(key, reason, options, errorOptions) {
+    super('Cache full: ' + reason, options, errorOptions);
+    this.key = key;
+    this.reason = reason;
+  }
+}
+
 const opaqueBody = value =>
   (typeof Blob !== 'undefined' && value instanceof Blob) ||
   (typeof ArrayBuffer !== 'undefined' &&

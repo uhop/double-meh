@@ -1,4 +1,5 @@
 // @ts-self-types="./cache.d.ts"
+import {CacheFull} from '../envelope.js';
 import {canonicalUrl} from '../key.js';
 import {memoryStorage} from '../storage/memory.js';
 
@@ -42,6 +43,20 @@ const toResponse = entry =>
     headers: entry.headers
   });
 
+// every backend reports a full store differently; code 22 is the legacy DOMException value
+const QUOTA_NAMES = new Set(['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED']);
+const QUOTA_CODES = new Set(['ENOSPC', 'SQLITE_FULL']);
+const isQuota = error =>
+  !!error && (QUOTA_NAMES.has(error.name) || QUOTA_CODES.has(error.code) || error.code === 22);
+
+const estimate = async () => {
+  try {
+    return typeof navigator === 'undefined' ? undefined : await navigator.storage?.estimate();
+  } catch {
+    return undefined;
+  }
+};
+
 export const installCache = io => {
   const storage = memoryStorage();
 
@@ -80,6 +95,86 @@ export const installCache = io => {
     return entry;
   };
 
+  const sweepExpired = async () => {
+    const cutoff = Date.now();
+    let removed = 0;
+    for (const key of await io.cache.storage.keys()) {
+      const entry = await io.cache.storage.get(key);
+      if (entry && entry.expiresAt <= cutoff) {
+        await io.cache.storage.delete(key);
+        ++removed;
+      }
+    }
+    return removed;
+  };
+
+  // nearest-to-expiry first: a TTL cache knows when an entry dies, never when it was last read
+  const evictSoonest = async needed => {
+    const all = [];
+    for (const key of await io.cache.storage.keys()) {
+      const entry = await io.cache.storage.get(key);
+      if (entry) all.push({key, expiresAt: entry.expiresAt, bytes: entry.body.byteLength});
+    }
+    all.sort((a, b) => a.expiresAt - b.expiresAt);
+    let freed = 0,
+      removed = 0;
+    for (const item of all) {
+      if (freed >= needed) break;
+      await io.cache.storage.delete(item.key);
+      freed += item.bytes;
+      ++removed;
+    }
+    return removed;
+  };
+
+  const refuse = async (key, bytes, reason, error, extra) => {
+    const {quota, usage} = (await estimate()) || {};
+    io.emit('cache-skip', {key, bytes, reason, quota, usage, error, ...extra});
+    throw new CacheFull(key, reason, undefined, error ? {cause: error} : undefined);
+  };
+
+  const store = async (key, entry) => {
+    const bytes = entry.body.byteLength;
+    if (bytes > io.cache.maxEntryBytes) return refuse(key, bytes, 'too-large');
+    try {
+      return await io.cache.storage.set(key, entry);
+    } catch (error) {
+      if (!isQuota(error)) return refuse(key, bytes, 'error', error);
+      let expired = 0,
+        evicted = 0;
+      try {
+        expired = await sweepExpired();
+        if (expired) {
+          try {
+            return await io.cache.storage.set(key, entry);
+          } catch (again) {
+            if (!isQuota(again)) throw again;
+          }
+        }
+        evicted = await evictSoonest(bytes);
+        if (evicted) {
+          try {
+            return await io.cache.storage.set(key, entry);
+          } catch (again) {
+            if (!isQuota(again)) throw again;
+          }
+        }
+      } catch (during) {
+        return refuse(key, bytes, 'error', during, {expired, evicted});
+      }
+      return refuse(key, bytes, 'quota', error, {expired, evicted});
+    }
+  };
+
+  // the response is already in the caller's hands: a cache that cannot store it is not their problem
+  const storeQuietly = async (key, entry) => {
+    try {
+      await store(key, entry);
+    } catch (error) {
+      if (!(error instanceof CacheFull)) throw error;
+    }
+  };
+
   const handle = async (request, ctx, next) => {
     if (!optIn(ctx.options)) return null;
     const key = ctx.key;
@@ -91,12 +186,12 @@ export const installCache = io => {
       request.headers.set('If-Modified-Since', entry.lastModified);
     const response = await next();
     if (entry && response.status === 304) {
-      await io.cache.storage.set(key, refresh(entry, response, ttlFor(ctx.options)));
+      await storeQuietly(key, refresh(entry, response, ttlFor(ctx.options)));
       return toResponse(entry);
     }
     if (response.ok) {
       const stored = await toEntry(response, ttlFor(ctx.options), request.headers);
-      if (stored.vary !== null) await io.cache.storage.set(key, stored); // Vary: * is uncacheable
+      if (stored.vary !== null) await storeQuietly(key, stored); // Vary: * is uncacheable
       return toResponse(stored);
     }
     return response;
@@ -114,6 +209,7 @@ export const installCache = io => {
   io.cache = {
     storage,
     defaultTtl: 5 * 60 * 1000,
+    maxEntryBytes: Infinity,
     theDefault: options => !options.transport,
     isActive: false,
     optIn,
@@ -148,11 +244,7 @@ export const installCache = io => {
       return io;
     },
     sweep: async () => {
-      const cutoff = Date.now();
-      for (const key of await io.cache.storage.keys()) {
-        const entry = await io.cache.storage.get(key);
-        if (entry && entry.expiresAt <= cutoff) await io.cache.storage.delete(key);
-      }
+      await sweepExpired();
       return io;
     },
     save: (target, response, ttl) =>
@@ -163,7 +255,7 @@ export const installCache = io => {
           if (bag.accept) headers.set('accept', bag.accept);
           if (!headers.has('accept')) headers.set('accept', 'application/json'); // prepare's default
           const entry = await toEntry(response, ttl == null ? io.cache.defaultTtl : ttl, headers);
-          if (entry.vary !== null) await io.cache.storage.set(keyOf(target), entry);
+          if (entry.vary !== null) await store(keyOf(target), entry);
           return io;
         })()
       ),

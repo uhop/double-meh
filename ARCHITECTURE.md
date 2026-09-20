@@ -123,6 +123,8 @@ import {sqliteStorage} from 'double-meh/storage/sqlite.js';
 import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
 
+// cache write refusals: io.CacheFull (explicit saves) + the 'cache-skip' event (implicit caching)
+
 // CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
 import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
 

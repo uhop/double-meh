@@ -62,4 +62,4 @@ export const stream = io.stream;
 export const records = io.records;
 export const sse = io.sse;
 export {installCodeForward} from './code-forward.js';
-export {IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';
+export {IOError, FailedIO, BadStatus, TimedOut, CacheFull, isAbort} from './envelope.js';

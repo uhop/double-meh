@@ -1,6 +1,14 @@
 // @ts-self-types="./io.d.ts"
 import {acceptOf, buildUrl, requestKey} from './key.js';
-import {makeEnvelope, IOError, FailedIO, BadStatus, TimedOut, isAbort} from './envelope.js';
+import {
+  makeEnvelope,
+  IOError,
+  FailedIO,
+  BadStatus,
+  TimedOut,
+  CacheFull,
+  isAbort
+} from './envelope.js';
 
 const readVerbs = {GET: 1, HEAD: 1, OPTIONS: 1, DELETE: 1};
 const bodylessVerbs = {GET: 1, HEAD: 1, OPTIONS: 1};
@@ -607,6 +615,7 @@ export const createIO = () => {
   io.FailedIO = FailedIO;
   io.BadStatus = BadStatus;
   io.TimedOut = TimedOut;
+  io.CacheFull = CacheFull;
 
   return io;
 };

@@ -30,6 +30,19 @@ export declare class TimedOut extends FailedIO {
   constructor(response?: Response, options?: Options, errorOptions?: ErrorOptions);
 }
 
+export declare class CacheFull extends IOError {
+  /** The cache key whose entry was refused. */
+  key: string;
+  /** Why the write was refused: the store was full, the body exceeded `maxEntryBytes`, or the backend failed. */
+  reason: 'quota' | 'too-large' | 'error';
+  constructor(
+    key: string,
+    reason: 'quota' | 'too-large' | 'error',
+    options?: Options,
+    errorOptions?: ErrorOptions
+  );
+}
+
 export declare interface BadStatus<T = unknown> extends Envelope<T> {}
 export declare class BadStatus<T = unknown> extends IOError {
   constructor(
