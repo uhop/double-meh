@@ -122,6 +122,7 @@ import {fsStorage} from 'double-meh/storage/fs.js';
 import {sqliteStorage} from 'double-meh/storage/sqlite.js';
 import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
+import {webStorage} from 'double-meh/storage/web-storage.js';
 
 // cache write refusals: io.CacheFull (explicit saves) + the 'cache-skip' event (implicit caching)
 

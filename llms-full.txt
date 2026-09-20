@@ -39,6 +39,7 @@ import {fsStorage} from 'double-meh/storage/fs.js';
 import {sqliteStorage} from 'double-meh/storage/sqlite.js';
 import {cacheApiStorage} from 'double-meh/storage/cache-api.js';
 import {indexedDbStorage} from 'double-meh/storage/indexed-db.js';
+import {webStorage} from 'double-meh/storage/web-storage.js';
 
 // CLI compression encoders (br/zstd) — opt-in, registered into io.encoders
 import {installZlibEncoders} from 'double-meh/encoders/zlib.js';
@@ -229,7 +230,12 @@ Backends: `memoryStorage` (default, per instance), `fsStorage` (one file per ent
 dir, atomic temp+rename), `sqliteStorage` (feature-detected `node:sqlite` / `bun:sqlite`, not Deno;
 async factory), `cacheApiStorage` (browser Cache API, metadata as synthetic `x-io-*` headers), and
 `indexedDbStorage` (browsers; structured clone stores the entry verbatim, so no encoding and no
-`Infinity` sentinel, and `keys()` is one `getAllKeys()`). A backend that cannot store an entry
+`Infinity` sentinel, and `keys()` is one `getAllKeys()`), and `webStorage` (browsers and Deno;
+`sessionStorage` by default, `localStorage` on request; JSON with a base64 body and `null` for
+`Infinity`; the only backend with no container, so `name` is a key prefix and `clear()`/`keys()`
+filter on it instead of calling `store.clear()`, which would wipe the origin; records carry a
+version and encoding tag and degrade to a miss when unrecognized; ~5 MB origin quota and
+synchronous main-thread access, so pair it with `io.cache.maxEntryBytes`). A backend that cannot store an entry
 lets its error out of `set`: the cache recognizes `QuotaExceededError` /
 `NS_ERROR_DOM_QUOTA_REACHED` / DOMException code 22 / `ENOSPC` / `SQLITE_FULL`, sweeps expired
 entries, evicts nearest-to-expiry, retries once at each step, then drops the entry. Implicit
