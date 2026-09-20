@@ -42,7 +42,11 @@ export const installTrack = io => {
     theDefault: options => !options.transport,
     deferred,
     flyByKey,
-    fly: options => flyByKey(keyOf(options)),
+    fly: options => {
+      const entry = flyByKey(keyOf(options));
+      entry.flying = true; // the request is already under way elsewhere: adopt will fulfill it
+      return entry;
+    },
     isFlying: options => deferred[keyOf(options)],
     optIn,
     attach: () => {

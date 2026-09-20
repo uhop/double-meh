@@ -148,3 +148,16 @@ test('a follower’s abort never touches the leader', async t => {
   t.notOk(seen.signal.aborted, 'the wire was never aborted');
   await reset();
 });
+
+test('fly holds the key: no request fires, and a later adopt delivers it', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+  const url = 'https://example.com/fly-holds';
+  io.track.fly(url);
+  setTimeout(() => io.adopt(url, json({from: 'elsewhere'})), 5);
+  const [a, b] = await Promise.all([io.get(url), io.get(url)]);
+  t.equal(calls, 0, 'fly suppressed the request: the response came from elsewhere');
+  t.deepEqual(a, {from: 'elsewhere'}, 'the first waiter got the adopted response');
+  t.deepEqual(b, {from: 'elsewhere'}, 'the second waiter shared it');
+  await reset();
+});
