@@ -233,3 +233,26 @@ test('makeKey canonicalizes: sorts query, drops fragment', t => {
   t.equal(a, b, 'order-independent key');
   t.equal(a, 'GET https://example.com/x?a=1&b=2', 'canonical form');
 });
+
+test("decode: 'response' hands back the Response itself", async t => {
+  serve(() => json({hello: 'world'}, {headers: {'x-trace': 'abc'}}));
+  const response = await io.get('https://example.com/raw', null, {decode: 'response'});
+  t.ok(response instanceof Response, 'a Response came back');
+  t.equal(response.status, 200, 'status is readable');
+  t.equal(response.headers.get('x-trace'), 'abc', 'headers are readable');
+  t.deepEqual(await response.json(), {hello: 'world'}, 'the body is unread and available');
+
+  const envelope = await io.full('https://example.com/raw2', null, {decode: 'response'});
+  t.ok(envelope.data instanceof Response, 'io.full puts it in data');
+  t.ok(envelope.response instanceof Response, 'and the envelope still carries its own');
+  await reset();
+});
+
+test("decode: 'response' still answers when there is no body", async t => {
+  serve(() => new Response(null, {status: 204, headers: {'x-trace': 'no-body'}}));
+  const response = await io.get('https://example.com/raw204', null, {decode: 'response'});
+  t.ok(response instanceof Response, 'a Response came back at 204');
+  t.equal(response.status, 204, 'the status is the point of the call');
+  t.equal(response.headers.get('x-trace'), 'no-body', 'headers are readable');
+  await reset();
+});

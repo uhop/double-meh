@@ -2,6 +2,7 @@
 // page half of the SW message contract v1 — lockstep with double-meh-sw src/{contract,messages}.js
 
 import {canonicalUrl, absoluteUrl} from './key.js';
+import {nullBodyStatus} from './envelope.js';
 
 const HELLO = 'io:hello';
 const FETCH = 'io:fetch';
@@ -13,8 +14,6 @@ const INVALIDATED = 'io:invalidated';
 export const SHARED_CACHE = 'io-shared';
 // lockstep: double-meh-sw broadcasts io:invalidated on this channel
 export const CHANNEL = 'io';
-
-const nullBodyStatus = {204: true, 205: true, 304: true};
 
 export const installSW = (io, options = {}) => {
   const {

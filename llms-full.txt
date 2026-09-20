@@ -180,7 +180,7 @@ interface Options {
 Semantics worth knowing:
 
 - **`listSeparator`** — how arrays serialize in the query. A string joins each list into one parameter (`','` -> `?tags=a,b`; note `URLSearchParams` percent-encodes the separator on the wire). `null` or unset -> repeated keys (`?tags=a&tags=b`), the ambiguity-free default. An explicit value also governs `fields`/`sort`/`expand`, whose own unset default stays `','` (their protocol form).
-- **`decode`** — `DecodeMode` is `'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData'`. A `decode` override opts the request out of `track` (the cache is byte-level and unaffected).
+- **`decode`** — `DecodeMode` is `'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData' | 'response'`. A `decode` override opts the request out of `track` (the cache is byte-level and unaffected). `'response'` short-circuits ahead of the empty-body guard, the way `stream` does, and hands back `meter(response, options)` — the `Response` itself, body unread, progress metering intact — so it answers at `204`/`304` where a decoded body is `undefined`. `Envelope.response` carries the same object on every call; `decode: 'response'` is the form that puts it in `data` so a plain verb returns it.
 - **`retry`** — `RetryConfig` is `{retries?, initDelay?, force?, nextDelay?(delay, attempt, options), continueRetries?(response, attempt, options)}`. `continueRetries` turns retry into polling. Unsafe verbs are not retried without `force`.
 - **`compress`** — an encoder name from `io.encoders`, `true` for gzip, or an inline `CompressionEncoder` (which owns its own `Content-Encoding` header — set it via `headers`).
 - **`bundle`** — `true` joins the default window; a string names a bundle for `io.bundle.flush(name)`.

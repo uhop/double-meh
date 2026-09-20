@@ -1,4 +1,5 @@
 // @ts-self-types="./cache-api.d.ts"
+import {nullBodyStatus} from '../envelope.js';
 // entry metadata rides as synthetic x-io-* headers on the stored Response
 const BASE = 'https://io-cache.invalid/';
 const EXPIRES = 'x-io-expires-at';
@@ -46,7 +47,7 @@ export const cacheApiStorage = ({name = 'double-meh'} = {}) => {
         await open()
       ).put(
         urlOf(key),
-        new Response(entry.body, {
+        new Response(nullBodyStatus[entry.status] ? null : entry.body, {
           status: entry.status,
           statusText: entry.statusText,
           headers

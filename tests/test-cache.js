@@ -123,3 +123,22 @@ test('non-2xx responses are not cached', async t => {
   t.equal(calls, 2, 'errors are passed through, never stored');
   await reset();
 });
+
+test('a bodyless status round-trips instead of crashing the Response constructor', async t => {
+  for (const status of [204, 205]) {
+    let calls = 0;
+    serve(() => {
+      ++calls;
+      return new Response(null, {status, headers: {'x-trace': 'seen'}});
+    });
+    const url = 'https://example.com/nobody-' + status;
+    const first = await io.full(url);
+    t.equal(first.status, status, status + ': the first read comes back');
+    t.equal(first.response.headers.get('x-trace'), 'seen', status + ': headers survive');
+    await io.cache.idle();
+    const second = await io.full(url);
+    t.equal(second.status, status, status + ': and so does the cached read');
+    t.equal(calls, 1, status + ': served from the cache the second time');
+    await reset();
+  }
+});

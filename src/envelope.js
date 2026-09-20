@@ -1,4 +1,7 @@
 // @ts-self-types="./envelope.d.ts"
+// the Response constructor rejects these with any body, an empty ArrayBuffer included
+export const nullBodyStatus = {204: true, 205: true, 304: true};
+
 const weakRe = /^W\//;
 
 const parseHeaders = response => {

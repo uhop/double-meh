@@ -372,6 +372,8 @@ export const createIO = () => {
 
   const decode = (response, options) => {
     if (options.stream) return meter(response, options).body;
+    // ahead of the empty-body guard: a caller asking for the Response wants it at 204 too
+    if (options.decode === 'response') return meter(response, options);
     const method = (options.method || 'GET').toUpperCase();
     if (noResponseBody[method] || response.status === 204 || response.body == null)
       return undefined;

@@ -1,5 +1,5 @@
 // @ts-self-types="./cache.d.ts"
-import {CacheFull} from '../envelope.js';
+import {CacheFull, nullBodyStatus} from '../envelope.js';
 import {canonicalUrl} from '../key.js';
 import {memoryStorage} from '../storage/memory.js';
 
@@ -37,7 +37,7 @@ const toEntry = async (response, ttl, requestHeaders) => ({
 });
 
 const toResponse = entry =>
-  new Response(entry.body, {
+  new Response(nullBodyStatus[entry.status] ? null : entry.body, {
     status: entry.status,
     statusText: entry.statusText,
     headers: entry.headers

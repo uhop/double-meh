@@ -1,5 +1,6 @@
 // @ts-self-types="./bundle.d.ts"
 import {lines, parsedBadStatus} from '../records.js';
+import {nullBodyStatus} from '../envelope.js';
 
 export const REQUEST_MIME = 'application/vnd.double-meh.bundle-request+json';
 export const BUNDLE_MIME = 'application/vnd.double-meh.bundle+json';
@@ -29,7 +30,7 @@ const decodeBody = part => {
 
 const toResponse = part => {
   const status = part.status || 200;
-  const body = status === 204 || status === 304 ? null : decodeBody(part);
+  const body = nullBodyStatus[status] ? null : decodeBody(part);
   return new Response(body, {
     status,
     statusText: part.statusText || '',

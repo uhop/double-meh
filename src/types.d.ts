@@ -8,7 +8,7 @@ export type HeaderDict = Record<string, HeaderValue>;
 
 export type QueryInput = Record<string, unknown> | URLSearchParams | string | number | boolean;
 
-export type DecodeMode = 'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData';
+export type DecodeMode = 'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData' | 'response';
 
 export interface RetryConfig {
   retries?: number;

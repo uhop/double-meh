@@ -71,7 +71,7 @@ meta}`
 Notable:
 
 - `as` — request body shaping: `'merge-patch'`, `'json-patch'`, `'json'`, `'ndjson'`, `'jsonl'`, `'text'`, `'csv'`, `'html'`, `'xml'`, `'form'`, `'octet'`.
-- `decode` — `'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData'`, or a function.
+- `decode` — `'json' | 'text' | 'blob' | 'arrayBuffer' | 'formData' | 'response'`, or a function. `'response'` returns the unread `Response` (the short form of `(await io.full(url)).response`) and answers at bodyless statuses; like any `decode` override it opts the request out of `track`.
 - `listSeparator` — how arrays serialize in the query. Unset/`null` = repeated keys (`?tags=a&tags=b`), the ambiguity-free default; a string joins (`','` -> `?tags=a,b`). `fields`/`sort`/`expand` default to `','` on their own.
 - `retry` — `true`, a count, or `{retries, initDelay, force, nextDelay, continueRetries}`; `continueRetries` turns retry into polling.
 - `cache` — `true`/`false` or `{ttl}`; `track` — `true`/`false`/`'wait'` (register interest without firing).

@@ -1,3 +1,6 @@
+/** Statuses the `Response` constructor refuses to pair with a body, even an empty one. */
+export declare const nullBodyStatus: Record<number, true>;
+
 import type {Envelope, Options} from './types.js';
 
 export declare function defineEnvelope<T extends object>(
