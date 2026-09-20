@@ -1,7 +1,7 @@
 // @ts-self-types="./code-forward.d.ts"
-const KEY = '__doubleMeh';
+import {normalizeTarget} from './key.js';
 
-const normalize = target => (typeof target === 'string' ? {url: target} : target);
+const KEY = '__doubleMeh';
 
 export const installCodeForward = io => {
   const root = globalThis;
@@ -12,7 +12,7 @@ export const installCodeForward = io => {
   const use = fn => fn(io);
   const fly = target => {
     io.track.fly(target);
-    return io.makeKey(normalize(target));
+    return io.makeKey(normalizeTarget(target));
   };
   const arrived = (target, response) => io.adopt(target, response);
 

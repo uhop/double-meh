@@ -101,6 +101,21 @@ export const requestKey = (method, url, accept) => {
   return accept && accept !== DEFAULT_ACCEPT ? base + ' accept=' + accept : base;
 };
 
+// Request shares five property names with Options and disagrees on `cache` (`"default"` reads as
+// a truthy cache opt-in), so only the three that identify a request are taken
+export const normalizeTarget = target => {
+  if (typeof target === 'string') return {url: target};
+  if (target instanceof URL) return {url: target.href};
+  if (typeof Request !== 'undefined' && target instanceof Request) {
+    return {
+      method: target.method,
+      url: target.url,
+      accept: target.headers.get('accept') || undefined
+    };
+  }
+  return target;
+};
+
 export const acceptOf = options => {
   if (options.accept) return options.accept;
   const headers = options.headers;

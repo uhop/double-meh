@@ -1,5 +1,6 @@
 import test from 'tape-six';
 import {io, json, serve, reset} from './helper.js';
+import {normalizeTarget as normalizeTargetFor} from '../src/key.js';
 
 test('track dedupes concurrent identical GETs', async t => {
   let calls = 0;
@@ -210,5 +211,87 @@ test('a hand-over is consumed once, and the method is part of the key', async t 
     {from: 'network', n: 2},
     'a GET key is not a PUT key'
   );
+  await reset();
+});
+
+test('a non-GET hand-over is held for an application that has not loaded yet', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+  const url = 'https://example.com/held-post';
+  io.adopt({method: 'POST', url}, json({from: 'prelude'}));
+  await new Promise(resolve => setTimeout(resolve, 30)); // the response lands with no receiver
+  t.deepEqual(await io.post({url}, {q: 1}), {from: 'prelude'}, 'the late caller got it');
+  t.equal(calls, 0, 'no request fired');
+  t.deepEqual(await io.post({url}, {q: 2}), {from: 'network', n: 1}, 'and it is gone after one');
+  await reset();
+});
+
+test('a held hand-over expires', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+  const saved = io.track.retainMs;
+  io.track.retainMs = 10;
+  const url = 'https://example.com/held-expires';
+  io.adopt({method: 'POST', url}, json({from: 'prelude'}));
+  await new Promise(resolve => setTimeout(resolve, 40));
+  t.deepEqual(await io.post({url}, {q: 1}), {from: 'network', n: 1}, 'a stale hold is not served');
+  io.track.retainMs = saved;
+  await reset();
+});
+
+test('a GET hand-over is not held: the cache is its durable copy', async t => {
+  serve(() => json({from: 'network'}));
+  const url = 'https://example.com/held-get';
+  io.adopt(url, json({from: 'prelude'}));
+  await io.cache.idle();
+  await new Promise(resolve => setTimeout(resolve, 10));
+  t.notOk(io.track.deferred[io.makeKey({url})], 'the in-flight table is clean');
+  t.deepEqual(await io.get(url), {from: 'prelude'}, 'and the cache still serves it');
+  await reset();
+});
+
+test('a Request is a first-class target, and so is a URL', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+
+  const post = 'https://example.com/target-request';
+  const request = new Request(post, {method: 'POST', body: JSON.stringify({q: 1})});
+  io.adopt(request, json({from: 'prelude'}));
+  t.deepEqual(await io.post({url: post}, {q: 1}), {from: 'prelude'}, 'a Request target matches');
+
+  const withAccept = new Request('https://example.com/t-key?b=2&a=1', {
+    method: 'PUT',
+    headers: {Accept: 'application/vnd.api+json'}
+  });
+  t.equal(
+    io.makeKey(withAccept),
+    io.makeKey({
+      method: 'PUT',
+      url: 'https://example.com/t-key?b=2&a=1',
+      accept: 'application/vnd.api+json'
+    }),
+    'a Request keys exactly as the object form'
+  );
+
+  const viaUrl = 'https://example.com/target-url';
+  io.adopt(new URL(viaUrl), json({from: 'prelude'}));
+  t.deepEqual(await io.get(viaUrl), {from: 'prelude'}, 'a URL target matches');
+  await reset();
+});
+
+test('a Request never contributes its own options: cache is not one of ours', async t => {
+  const saved = io.cache.theDefault;
+  io.cache.theDefault = () => false;
+  const url = 'https://example.com/target-cache';
+  t.notOk(io.cache.optIn({url}), 'the object form opts out');
+  t.notOk(
+    io.cache.optIn(normalizeTargetFor(new Request(url))),
+    "a Request's own `cache` does not read as an opt-in"
+  );
+  t.notOk(
+    io.cache.optIn(normalizeTargetFor(new Request(url, {cache: 'no-store'}))),
+    'not even when the page asked for no-store'
+  );
+  io.cache.theDefault = saved;
   await reset();
 });

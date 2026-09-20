@@ -213,7 +213,11 @@ default for plain GETs. All expose `attach()` / `detach()`.
 Dedup at the decoded-envelope level (decode once, share the result), keyed by the canonical
 `makeKey`; streams are skipped. `track: 'wait'` registers interest without firing. `optIn`'s
 GET-only rule governs inferred dedup; a key explicitly reserved by `fly` or adopted by `adopt` is
-honored for any verb, consumed once, and (being a non-GET) delivered without being cached. Cancellation is
+honored for any verb, consumed once, and (being a non-GET) delivered without being cached. A
+non-GET hand-over that settles with no waiter is held for the first later taker and dropped after
+`io.track.retainMs` (default 60000, `0` disables); a GET is not held, because the cache is its
+durable copy. Targets normalize through `normalizeTarget` (`src/key.js`): a `Request` contributes
+only method, URL and `Accept`, so its `cache`/`mode`/`credentials` never read as `Options`. Cancellation is
 refcounted: a caller's abort detaches only that caller, rejecting with its own error; the wire
 aborts when the last waiter leaves, and a signalless caller pins it to completion.
 

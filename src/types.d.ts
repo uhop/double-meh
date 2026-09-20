@@ -178,7 +178,7 @@ export interface Service {
 
 export type ServiceDefault = boolean | ((options: Options) => boolean);
 
-export type Target = string | URL | Options;
+export type Target = string | URL | Request | Options;
 export type Overrides = Omit<Options, 'url'> & {url?: never};
 export type Verb = <T = unknown>(url: Target, data?: unknown, options?: Overrides) => Promise<T>;
 export type MetaVerb = (url: Target, data?: unknown, options?: Overrides) => Promise<Envelope>;
@@ -267,10 +267,18 @@ export interface Deferred<T> {
   resolve(value: T): void;
   reject(reason?: unknown): void;
   flying?: boolean;
+  /** Set once the promise has settled. */
+  settled?: boolean;
+  /** A held hand-over: kept past settlement until a caller takes it, or until this moment. */
+  retainUntil?: number;
+  /** How many callers have joined this entry. */
+  takers?: number;
 }
 
 export interface Track {
   active: boolean;
+  /** How long a non-GET hand-over is held for a caller that has not loaded yet. Default 60000. */
+  retainMs: number;
   theDefault: ServiceDefault;
   deferred: Record<string, Deferred<Envelope>>;
   flyByKey(key: string): Deferred<Envelope>;

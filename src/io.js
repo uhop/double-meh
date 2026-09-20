@@ -557,6 +557,11 @@ export const createIO = () => {
         const unhook = () => callerSignal.removeEventListener('abort', detach);
         entry.promise.then(unhook, unhook);
       }
+      // a held hand-over is one-shot: its taker gets it and the table lets it go
+      entry.takers = (entry.takers || 0) + 1;
+      if (entry.settled && entry.retainUntil !== undefined && track.deferred[ctx.key] === entry) {
+        delete track.deferred[ctx.key];
+      }
       if (!wait && !entry.flying) {
         entry.flying = true;
         request.signal = entry.controller.signal;

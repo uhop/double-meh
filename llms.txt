@@ -84,6 +84,8 @@ Response-level middleware in a priority onion; each opts in per request (its own
 `theDefault` (boolean or predicate). Cache and track are on by default for plain GETs.
 
 - `io.track` — run-level GET dedup at the decoded-envelope level, plus `adopt`. Cancellation is refcounted: a caller's abort detaches only that caller; the wire aborts when the last waiter leaves.
+- The hand-over is verb-agnostic by design and takes no view on semantics; in practice a non-GET hand-over is a read that does not fit a GET (a bundle request, a large search body, `QUERY`). A state-changing call is possible and runs on every page load whether or not the application asks for it.
+- A hand-over target may be a `Request`, a `URL`, a string, or an options object; a `Request` contributes only method, URL and `Accept` (its own `cache`/`mode`/`credentials` never reach the key). A non-GET hand-over whose response lands with no waiter is held until one taker collects it, or until `io.track.retainMs` (default 60000, `0` disables) — held in memory, never stored, distinct from caching.
 - A key reserved by `io.track.fly(target)` or already handed to `io.adopt(target, source)` is honored whatever the verb: the GET-only rule in `track.optIn` governs inferred dedup, not an explicit reservation, so a code-forward `POST`/`PUT`/`QUERY` hand-over resolves the application's matching call. Unreserved non-GET calls are never shared, the entry is consumed once, and only a GET hand-over is cached.
 - `io.cache` — app-governed cache: `storage`, `defaultTtl`, `remove(pattern)`, `clear()`, `sweep()`, `save()`, `idle()`. Honors `Vary`, revalidates with 304.
 - `io.retry` — verb-safety-aware: `retries`, `initDelay`, `maxDelay`, `nextDelay()`.
