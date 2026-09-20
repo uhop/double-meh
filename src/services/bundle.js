@@ -20,6 +20,28 @@ const matches = (match, url) =>
       ? match.test(url)
       : !!match(url));
 
+const hostOf = url => {
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return undefined;
+  }
+};
+
+// a bundler fetches on the page's behalf, often from inside the network the APIs live on, so what
+// it will be handed is a security boundary and not only routing. A string prefix is the wrong
+// tool for it: 'https://api.example.com' also prefixes 'https://api.example.com.evil.test'.
+// Compare the parsed host instead, and fail closed on a URL that will not parse.
+const hostMatches = (host, url) => {
+  if (host == null) return true;
+  const actual = hostOf(url);
+  if (actual === undefined) return false;
+  if (typeof host === 'string') return host.toLowerCase() === actual;
+  if (Array.isArray(host)) return host.some(one => String(one).toLowerCase() === actual);
+  if (host instanceof RegExp) return host.test(actual);
+  return !!host(actual);
+};
+
 const decodeBody = part => {
   if (part.body == null) return null;
   if (part.encoding === 'base64')
@@ -58,7 +80,10 @@ export const installBundle = io => {
   });
 
   const selectBundler = url => {
-    for (const bundler of bundlers) if (matches(bundler.match, url)) return bundler;
+    // both narrow when both are given: host scopes, match refines by path
+    for (const bundler of bundlers) {
+      if (hostMatches(bundler.host, url) && matches(bundler.match, url)) return bundler;
+    }
     return io.bundle.url ? io.bundle : null;
   };
 

@@ -703,3 +703,76 @@ test('bundle: the envelope verb is an option, defaulting to PUT', async t => {
   t.deepEqual(perBundler, ['QUERY'], 'a registered bundler carries its own verb');
   t.equal(dm.bundle.method, 'PUT', 'while the global default is untouched');
 });
+
+// with per-host bundlers the page opts in by default and lets unrouted hosts pass through; an
+// explicit {bundle: true} with no matching bundler is a TypeError by design
+const hostFixture = () => {
+  const shipped = [];
+  const direct = [];
+  const dm = isolated();
+  dm.bundle.theDefault = true;
+  dm.mock(
+    () => true,
+    request => {
+      if (new URL(request.url).pathname === '/bundle') {
+        const doc = JSON.parse(request.body);
+        shipped.push(doc.parts.map(part => part.url));
+        return bundleResponse(
+          doc.parts.map(part => ({
+            id: part.id,
+            url: part.url,
+            status: 200,
+            headers: {'content-type': 'application/json'},
+            body: {via: 'bundle'}
+          }))
+        );
+      }
+      direct.push(request.url);
+      return json({via: 'direct'});
+    }
+  );
+  return {dm, shipped, direct};
+};
+
+test('bundle: bundlers select by host, and a prefix is not a host boundary', async t => {
+  const {dm, shipped, direct} = hostFixture();
+  dm.bundle.register({url: 'https://bundler.test/bundle', host: 'api.example.com'});
+
+  const [real, lookalike] = await Promise.all([
+    dm.get('https://api.example.com/real'),
+    dm.get('https://api.example.com.evil.test/steal'),
+    dm.get('https://api.example.com/second')
+  ]);
+
+  t.deepEqual(real, {via: 'bundle'}, 'the matching host rode the bundler');
+  t.deepEqual(lookalike, {via: 'direct'}, 'a host that merely shares the prefix did not');
+  t.deepEqual(
+    shipped,
+    [['https://api.example.com/real', 'https://api.example.com/second']],
+    'and it never entered the envelope'
+  );
+  t.deepEqual(direct, ['https://api.example.com.evil.test/steal'], 'it went on its own');
+});
+
+test('bundle: host accepts a list, and host plus match both narrow', async t => {
+  const {dm, shipped} = hostFixture();
+  dm.bundle.register({
+    url: 'https://bundler.test/bundle',
+    host: ['a.example.com', 'b.example.com'],
+    match: 'https://a.example.com/api/'
+  });
+
+  const [onList, wrongPath] = await Promise.all([
+    dm.get('https://a.example.com/api/x'),
+    dm.get('https://a.example.com/other'),
+    dm.get('https://a.example.com/api/y')
+  ]);
+
+  t.deepEqual(onList, {via: 'bundle'}, 'host and match both satisfied');
+  t.deepEqual(wrongPath, {via: 'direct'}, 'the host alone is not enough when match is given');
+  t.deepEqual(
+    shipped,
+    [['https://a.example.com/api/x', 'https://a.example.com/api/y']],
+    'only the narrowed pair was shipped'
+  );
+});

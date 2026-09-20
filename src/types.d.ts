@@ -367,6 +367,13 @@ export interface BundlerConfig {
   url: string;
   /** The envelope's verb for this bundler; defaults to `io.bundle.method`. */
   method?: string;
+  /**
+   * Select by host, compared against the parsed and lower-cased `URL.host` (so the port counts).
+   * Prefer this to a `match` prefix for choosing between APIs: a prefix is not a host boundary,
+   * and a bundler fetches on your behalf. A URL that will not parse matches nothing.
+   */
+  host?: string | string[] | RegExp | ((host: string) => boolean);
+  /** Select by URL. A string is a literal prefix, so scope it with `host` rather than relying on it. */
   match?: string | RegExp | ((url: string) => boolean);
   waitTime?: number;
   maxSize?: number;
