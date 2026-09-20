@@ -234,6 +234,18 @@ has no stable serialization (stream, `Blob`, `FormData`) yields `undefined` and 
 `optIn`s, so it is never shared under a bodyless key. There is no automatic substitution of POST
 for QUERY where a server rejects it; a 405 surfaces as `BadStatus`. The bundler is still GET-only.
 
+`io.cache` consults server directives on a narrow rule, in `src/services/cache.js`. Positive
+freshness is knowledge and is used: `max-age` > 0 or a future `Expires` sets the TTL, precedence
+`cache: {ttl}` > server > `io.cache.defaultTtl`, disabled per call or globally with `fromHeaders`
+(default true). `s-maxage` is ignored, a page cache being private. The negative forms --
+`no-cache`, `must-revalidate`, `max-age=0` -- are the absence of a schedule rather than one, and
+are ignored. `no-store` is honoured as durability only: the entry goes to `io.cache.volatile`, a
+memory store held beside `io.cache.storage` whatever that is set to, so the response is cached for
+the page and never written to disk; reads try volatile first, and `remove`, `sweep` and `clear`
+span both tiers. `Vary` is identity, so it is obeyed, and `Vary: *` blocks storage; `cache: {vary:
+false}` overrides both, for an application that handles variance itself (clearing on a language
+switch, say).
+
 ### io.cache — app-governed cache
 
 `io.cache.storage` defaults to `autoStorage(defaultCandidates)` from `src/storage/candidates.js`:

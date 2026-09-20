@@ -3,9 +3,43 @@ import {CacheFull, nullBodyStatus} from '../envelope.js';
 import {bodyKeyOf, canonicalUrl, safeMethods} from '../key.js';
 import {autoStorage} from '../storage/auto.js';
 import {defaultCandidates} from '../storage/candidates.js';
+// static, unlike the ladder's rungs: the volatile tier has to exist the moment the cache does
+import {memoryStorage} from '../storage/memory.js';
 
 // null = Vary: * (uncacheable); undefined = no Vary; else the selecting request-header snapshot
-const varyOf = (response, requestHeaders) => {
+// Positive freshness only. `max-age=900` or an `Expires` in the future is the server stating a
+// fact about its own schedule -- a nightly total really does expire at midnight. `no-cache`,
+// `must-revalidate` and `max-age=0` say the opposite: not "it is good until X" but "I have no
+// idea", which is the absence of knowledge rather than a schedule, and the application's TTL is
+// a better answer than a shrug. `s-maxage` is for shared caches, so a page cache ignores it.
+const NEGATIVE = /(?:^|,)\s*(?:no-cache|no-store|must-revalidate|proxy-revalidate)\s*(?:,|$)/i;
+const MAX_AGE = /(?:^|,)\s*max-age\s*=\s*"?(\d+)"?/i;
+// `no-store` is the one directive worth honouring, and not as written: confidentiality is policy
+// and procedure, and the response is on the screen either way. What it can mean here is narrower
+// and real -- do not write this to disk -- so such an entry goes to a volatile tier instead of
+// the configured backend, and dies with the page.
+const NO_STORE = /(?:^|,)\s*no-store\s*(?:,|$)/i;
+
+const freshnessOf = response => {
+  const control = response.headers.get('cache-control');
+  if (control) {
+    if (NEGATIVE.test(control)) return undefined;
+    const found = MAX_AGE.exec(control);
+    if (found) {
+      const seconds = Number(found[1]);
+      return seconds > 0 ? seconds * 1000 : undefined;
+    }
+  }
+  const expires = response.headers.get('expires');
+  if (!expires) return undefined;
+  const at = Date.parse(expires);
+  if (Number.isNaN(at)) return undefined;
+  const ms = at - Date.now();
+  return ms > 0 ? ms : undefined;
+};
+
+const varyOf = (response, requestHeaders, useVary) => {
+  if (!useVary) return undefined;
   const vary = response.headers.get('vary');
   if (!vary) return undefined;
   const fields = {};
@@ -26,7 +60,7 @@ const varyMatches = (entry, requestHeaders) => {
   return true;
 };
 
-const toEntry = async (response, ttl, requestHeaders) => ({
+const toEntry = async (response, ttl, requestHeaders, useVary) => ({
   status: response.status,
   statusText: response.statusText,
   headers: [...response.headers],
@@ -34,7 +68,7 @@ const toEntry = async (response, ttl, requestHeaders) => ({
   etag: response.headers.get('etag') || undefined,
   lastModified: response.headers.get('last-modified') || undefined,
   expiresAt: ttl === Infinity ? Infinity : Date.now() + ttl,
-  vary: varyOf(response, requestHeaders)
+  vary: varyOf(response, requestHeaders, useVary)
 });
 
 const toResponse = entry =>
@@ -71,6 +105,22 @@ export const installCache = io => {
     }
   });
 
+  // always memory, whatever io.cache.storage is set to
+  const volatileTier = memoryStorage();
+
+  const tiers = () =>
+    io.cache.volatile === io.cache.storage
+      ? [io.cache.storage]
+      : [io.cache.volatile, io.cache.storage];
+
+  const readAcross = async key => {
+    for (const tier of tiers()) {
+      const found = await tier.get(key);
+      if (found) return {entry: found, tier};
+    }
+    return {entry: undefined, tier: io.cache.storage};
+  };
+
   const pending = new Set();
   const watch = promise => {
     const settled = promise.then(
@@ -81,9 +131,22 @@ export const installCache = io => {
     return promise;
   };
 
-  const ttlFor = options => {
+  // a per-call cache bag overrides the service-wide setting for the same name
+  const setting = (options, name) => {
     const c = options.cache;
-    return c && typeof c === 'object' && typeof c.ttl === 'number' ? c.ttl : io.cache.defaultTtl;
+    const own = c && typeof c === 'object' ? c[name] : undefined;
+    return own === undefined ? io.cache[name] : own;
+  };
+
+  // the application's decision beats the server's knowledge beats the application's guess
+  const ttlFor = (options, response) => {
+    const c = options.cache;
+    if (c && typeof c === 'object' && typeof c.ttl === 'number') return c.ttl;
+    if (response && setting(options, 'fromHeaders')) {
+      const served = freshnessOf(response);
+      if (served !== undefined) return served;
+    }
+    return io.cache.defaultTtl;
   };
 
   const optIn = options => {
@@ -98,6 +161,11 @@ export const installCache = io => {
     return typeof d === 'function' ? !!d(options) : !!d;
   };
 
+  const tierFor = response =>
+    NO_STORE.test(response.headers.get('cache-control') || '')
+      ? io.cache.volatile
+      : io.cache.storage;
+
   const refresh = (entry, response, ttl) => {
     const headers = new Headers(entry.headers);
     response.headers.forEach((value, key) => {
@@ -111,15 +179,15 @@ export const installCache = io => {
   };
 
   // every loop below finishes what it started: a failing entry is collected, never a reason to stop
-  const sweepExpired = async () => {
+  const sweepExpired = async (target = io.cache.storage) => {
     const cutoff = Date.now();
     const failures = [];
     let removed = 0;
-    for (const key of await io.cache.storage.keys()) {
+    for (const key of await target.keys()) {
       try {
-        const entry = await io.cache.storage.get(key);
+        const entry = await target.get(key);
         if (entry && entry.expiresAt <= cutoff) {
-          await io.cache.storage.delete(key);
+          await target.delete(key);
           ++removed;
         }
       } catch (error) {
@@ -130,10 +198,10 @@ export const installCache = io => {
   };
 
   // nearest-to-expiry first: a TTL cache knows when an entry dies, never when it was last read
-  const evictSoonest = async needed => {
+  const evictSoonest = async (needed, target = io.cache.storage) => {
     const all = [];
-    for (const key of await io.cache.storage.keys()) {
-      const entry = await io.cache.storage.get(key);
+    for (const key of await target.keys()) {
+      const entry = await target.get(key);
       if (entry) all.push({key, expiresAt: entry.expiresAt, bytes: entry.body.byteLength});
     }
     all.sort((a, b) => a.expiresAt - b.expiresAt);
@@ -143,7 +211,7 @@ export const installCache = io => {
     for (const item of all) {
       if (freed >= needed) break;
       try {
-        await io.cache.storage.delete(item.key);
+        await target.delete(item.key);
         freed += item.bytes;
         ++removed;
       } catch (error) {
@@ -169,12 +237,12 @@ export const installCache = io => {
     throw error;
   };
 
-  const store = async (key, entry) => {
+  const store = async (key, entry, target = io.cache.storage) => {
     let bytes = 0;
     try {
       bytes = entry.body.byteLength;
       if (bytes > io.cache.maxEntryBytes) return await refuse(key, bytes, 'too-large');
-      return await io.cache.storage.set(key, entry);
+      return await target.set(key, entry);
     } catch (error) {
       if (error instanceof CacheFull) throw error; // already reported
       if (!isQuota(error)) return passThrough(key, bytes, error);
@@ -185,20 +253,20 @@ export const installCache = io => {
         ({
           removed: expired,
           failures: {length: partial}
-        } = await sweepExpired());
+        } = await sweepExpired(target));
         if (expired) {
           try {
-            return await io.cache.storage.set(key, entry);
+            return await target.set(key, entry);
           } catch (again) {
             if (!isQuota(again)) throw again;
           }
         }
-        const swept = await evictSoonest(bytes);
+        const swept = await evictSoonest(bytes, target);
         evicted = swept.removed;
         partial += swept.failures.length;
         if (evicted) {
           try {
-            return await io.cache.storage.set(key, entry);
+            return await target.set(key, entry);
           } catch (again) {
             if (!isQuota(again)) throw again;
           }
@@ -211,16 +279,16 @@ export const installCache = io => {
   };
 
   // the response is already in the caller's hands, and store() reports every failure on 'cache-skip'
-  const storeQuietly = async (key, entry) => {
+  const storeQuietly = async (key, entry, target) => {
     try {
-      await store(key, entry);
+      await store(key, entry, target);
     } catch {}
   };
 
   const handle = async (request, ctx, next) => {
     if (!optIn(ctx.options)) return null;
     const key = ctx.key;
-    let entry = await io.cache.storage.get(key);
+    let {entry, tier} = await readAcross(key);
     if (entry && !varyMatches(entry, request.headers)) entry = undefined; // another variant: a miss
     if (entry && entry.expiresAt > Date.now()) return toResponse(entry);
     if (entry && entry.etag) request.headers.set('If-None-Match', entry.etag);
@@ -228,12 +296,18 @@ export const installCache = io => {
       request.headers.set('If-Modified-Since', entry.lastModified);
     const response = await next();
     if (entry && response.status === 304) {
-      await storeQuietly(key, refresh(entry, response, ttlFor(ctx.options)));
+      await storeQuietly(key, refresh(entry, response, ttlFor(ctx.options, response)), tier);
       return toResponse(entry);
     }
     if (response.ok) {
-      const stored = await toEntry(response, ttlFor(ctx.options), request.headers);
-      if (stored.vary !== null) await storeQuietly(key, stored); // Vary: * is uncacheable
+      const stored = await toEntry(
+        response,
+        ttlFor(ctx.options, response),
+        request.headers,
+        setting(ctx.options, 'vary')
+      );
+      // Vary: * is uncacheable; no-store is storable but not durably
+      if (stored.vary !== null) await storeQuietly(key, stored, tierFor(response));
       return toResponse(stored);
     }
     return response;
@@ -259,13 +333,15 @@ export const installCache = io => {
   const evictBy = async match => {
     const failures = [];
     let removed = 0;
-    for (const key of await io.cache.storage.keys()) {
-      if (!match(key)) continue;
-      try {
-        await io.cache.storage.delete(key);
-        ++removed;
-      } catch (error) {
-        failures.push(error);
+    for (const tier of tiers()) {
+      for (const key of await tier.keys()) {
+        if (!match(key)) continue;
+        try {
+          await tier.delete(key);
+          ++removed;
+        } catch (error) {
+          failures.push(error);
+        }
       }
     }
     return {removed, failures};
@@ -282,6 +358,12 @@ export const installCache = io => {
     /** Which rung of the default ladder won, once one has. */
     backend: undefined,
     defaultTtl: 5 * 60 * 1000,
+    /** Take a TTL from a positive `max-age` or `Expires` when the response carries one. */
+    fromHeaders: true,
+    /** Let `Vary` decide identity, and `Vary: *` decide cacheability. */
+    vary: true,
+    /** Where a `no-store` response goes: memory, whatever `storage` is set to. */
+    volatile: volatileTier,
     maxEntryBytes: Infinity,
     theDefault: options => !options.transport,
     isActive: false,
@@ -301,11 +383,17 @@ export const installCache = io => {
       return io;
     },
     clear: async () => {
-      await io.cache.storage.clear();
+      for (const tier of tiers()) await tier.clear();
       return io;
     },
     sweep: async () => {
-      orThrow(await sweepExpired(), 'io.cache.sweep');
+      const total = {removed: 0, failures: []};
+      for (const tier of tiers()) {
+        const one = await sweepExpired(tier);
+        total.removed += one.removed;
+        total.failures.push(...one.failures);
+      }
+      orThrow(total, 'io.cache.sweep');
       return io;
     },
     save: (target, response, ttl) =>
@@ -315,7 +403,12 @@ export const installCache = io => {
           const headers = new Headers(bag.headers || undefined);
           if (bag.accept) headers.set('accept', bag.accept);
           if (!headers.has('accept')) headers.set('accept', 'application/json'); // prepare's default
-          const entry = await toEntry(response, ttl == null ? io.cache.defaultTtl : ttl, headers);
+          const entry = await toEntry(
+            response,
+            ttl == null ? ttlFor(bag, response) : ttl,
+            headers,
+            setting(bag, 'vary')
+          );
           if (entry.vary !== null) await store(keyOf(target), entry);
           return io;
         })()

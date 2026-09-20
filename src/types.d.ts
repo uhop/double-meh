@@ -71,7 +71,23 @@ export interface Options {
   stream?: boolean;
   bust?: boolean | string;
   ignoreBadStatus?: boolean;
-  cache?: boolean | {ttl?: number};
+  cache?:
+    | boolean
+    | {
+        ttl?: number;
+        /**
+         * Take the TTL from a positive `max-age` or `Expires`. An explicit `ttl` still wins, and
+         * `no-cache` / `must-revalidate` / `max-age=0` are ignored: they state the absence of a
+         * schedule, not one. Defaults to `io.cache.fromHeaders`.
+         */
+        fromHeaders?: boolean;
+        /**
+         * Let `Vary` decide. `false` stores one entry per URL and ignores `Vary: *`, for an
+         * application that handles variance itself (clearing the cache when the language
+         * changes, say). Defaults to `io.cache.vary`.
+         */
+        vary?: boolean;
+      };
   track?: boolean | 'wait';
   mock?: boolean;
   retry?: boolean | number | RetryConfig;
@@ -321,6 +337,22 @@ export type CachePattern = string | RegExp | ((key: string) => boolean);
 export interface Cache {
   /** Defaults to `autoStorage(defaultCandidates)`: IndexedDB, the Cache API, `sessionStorage`, memory. */
   storage: CacheStorage;
+  /**
+   * Take a TTL from a positive `max-age` or `Expires` where the response carries one. Default
+   * `true`. An explicit `cache: {ttl}` still wins, and the negative forms are ignored.
+   */
+  fromHeaders: boolean;
+  /**
+   * Let `Vary` decide identity, and `Vary: *` decide cacheability. Default `true`. Set `false`
+   * where the application handles variance itself.
+   */
+  vary: boolean;
+  /**
+   * Where a `no-store` response is kept: memory by default, whatever `storage` is set to, so it
+   * is cached for the page and never written to disk. Swap it to cap the tier, e.g.
+   * `memoryStorage({maxBytes})`. Reads, `remove`, `sweep` and `clear` span both tiers.
+   */
+  volatile: CacheStorage;
   /** The name of the ladder rung in use, set when the default ladder resolves. */
   backend?: string;
   defaultTtl: number;
