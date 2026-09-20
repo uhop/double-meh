@@ -295,3 +295,43 @@ test('a Request never contributes its own options: cache is not one of ours', as
   io.cache.theDefault = saved;
   await reset();
 });
+
+test('a GET hand-over is held when the cache cannot keep it', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+  io.cache.detach();
+  const url = 'https://example.com/held-get-nocache';
+  io.adopt(url, json({from: 'prelude'}));
+  await new Promise(resolve => setTimeout(resolve, 30)); // lands with no receiver, no cache
+  t.deepEqual(await io.get(url), {from: 'prelude'}, 'the hold covered for the cache');
+  t.equal(calls, 0, 'no request fired');
+  io.cache.attach();
+  await reset();
+});
+
+test('holding is keyed, and ordinary traffic is never shared', async t => {
+  let calls = 0;
+  serve(() => json({from: 'network', n: ++calls}));
+
+  const open = 'https://example.com/held-overlap';
+  const three = await Promise.all([
+    io.post({url: open}, {x: 1}),
+    io.post({url: open}, {x: 2}),
+    io.post({url: open}, {x: 3})
+  ]);
+  t.equal(calls, 3, 'three overlapping POSTs stay three requests');
+  t.deepEqual(
+    three.map(r => r.n),
+    [1, 2, 3],
+    'each caller got its own response'
+  );
+
+  // a handed-over key is body-blind: the first matching call takes it, whatever it was sending
+  calls = 0;
+  const handed = 'https://example.com/held-payload';
+  io.adopt({method: 'POST', url: handed}, json({from: 'prelude'}));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  t.deepEqual(await io.post({url: handed}, {x: 999}), {from: 'prelude'}, 'the hold is taken');
+  t.deepEqual(await io.post({url: handed}, {x: 998}), {from: 'network', n: 1}, 'then released');
+  await reset();
+});

@@ -11,8 +11,6 @@ const makeDeferred = () => {
 
 import {normalizeTarget} from '../key.js';
 
-const isGet = options => (options.method || 'GET').toUpperCase() === 'GET';
-
 export const installTrack = io => {
   const deferred = {};
 
@@ -39,10 +37,12 @@ export const installTrack = io => {
 
   const keyOf = options => io.makeKey(normalizeTarget(options));
 
-  // only a non-GET is held: for a GET the cache is the durable copy, and a second store in
-  // front of it would shadow the cache's own expiry
+  // the cache is the durable copy wherever it will take the entry, and a second store in front
+  // of it would shadow its expiry; hold exactly what it will not keep — every non-GET, and a GET
+  // whose cache is detached or declines it
+  const cacheKeeps = target => !!io.cache && io.cache.isActive && io.cache.optIn(target);
   const hold = (entry, target) => {
-    if (!isGet(target)) entry.retainUntil = Date.now() + io.track.retainMs;
+    if (!cacheKeeps(target)) entry.retainUntil = Date.now() + io.track.retainMs;
   };
 
   // GET-only by design: sharing one decoded envelope is only sound for safe reads
