@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="./bench.css" />
+<script type="module">
+  import {run} from './run.js';
+
+  run({
+    question: 'set — 2 KB bodies',
+    operation: 'set',
+    bodyBytes: 2048,
+    keyCount: 20,
+    reps: 50
+  });
+</script>

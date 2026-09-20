@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>double-meh cache backend benchmarks</title>
+<link rel="stylesheet" href="./bench.css" />
+<h1>Cache backend benchmarks</h1>
+<p>
+  One question per page, one page load per question — the browser stand-in for nano-bench's
+  "separate files, one process each". Open them one at a time.
+</p>
+<ul>
+  <li><a href="./set-small.html">set — 2 KB bodies</a></li>
+  <li><a href="./set-large.html">set — 64 KB bodies</a></li>
+  <li><a href="./get-small.html">get — 2 KB bodies</a></li>
+  <li><a href="./get-large.html">get — 64 KB bodies</a></li>
+  <li><a href="./keys-200.html">keys() — 200 entries</a></li>
+</ul>
+<p>
+  <strong>Open these over <code>https</code> or <code>localhost</code>.</strong> The Cache API and
+  OPFS exist only in a secure context, so on a plain <code>http://</code> origin they are skipped
+  for a reason that has nothing to do with speed. Each page prints what it skipped and why.
+</p>
