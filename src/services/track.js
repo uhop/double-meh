@@ -9,7 +9,7 @@ const makeDeferred = () => {
   return {promise, resolve, reject};
 };
 
-import {normalizeTarget} from '../key.js';
+import {bodyKeyOf, normalizeTarget, safeMethods} from '../key.js';
 
 export const installTrack = io => {
   const deferred = {};
@@ -50,7 +50,11 @@ export const installTrack = io => {
     if (options.stream) return false;
     // the envelope is decoded once, with the leader's decode — a custom decode must not be shared
     if (options.decode !== undefined) return false;
-    if ((options.method || 'GET').toUpperCase() !== 'GET') return false;
+    const method = (options.method || 'GET').toUpperCase();
+    if (!safeMethods[method]) return false;
+    // a safe method that carries its criteria in the body is identified by that body; with no
+    // usable key it must not share a bodyless one, so it opts out instead
+    if (method !== 'GET' && bodyKeyOf(options) === undefined) return false;
     if (options.track !== undefined) return !!options.track;
     const d = io.track.theDefault;
     return typeof d === 'function' ? !!d(options) : !!d;

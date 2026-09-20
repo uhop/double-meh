@@ -1,5 +1,5 @@
 // @ts-self-types="./io.d.ts"
-import {acceptOf, buildUrl, requestKey} from './key.js';
+import {acceptOf, bodyKeyOf, buildUrl, requestKey} from './key.js';
 import {
   makeEnvelope,
   IOError,
@@ -14,7 +14,7 @@ const readVerbs = {GET: 1, HEAD: 1, OPTIONS: 1, DELETE: 1};
 const bodylessVerbs = {GET: 1, HEAD: 1, OPTIONS: 1};
 const noResponseBody = {HEAD: 1, OPTIONS: 1};
 const metaVerbs = {HEAD: 1, OPTIONS: 1};
-const verbNames = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+const verbNames = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'QUERY'];
 const streamVerbNames = ['PUT', 'POST', 'PATCH'];
 const jsonRe = /^application\/(?:[\w.+-]+\+)?json\b/;
 
@@ -519,7 +519,12 @@ export const createIO = () => {
     }
     const ctx = {
       options,
-      key: requestKey(request.method, request.url, request.headers.get('accept')),
+      key: requestKey(
+        request.method,
+        request.url,
+        request.headers.get('accept'),
+        bodyKeyOf(options)
+      ),
       userSignal,
       timeoutSignal
     };
@@ -625,7 +630,12 @@ export const createIO = () => {
     return finalize(response, ctx, normalized.url);
   };
   io.makeKey = options =>
-    requestKey((options.method || 'GET').toUpperCase(), buildUrl(options), acceptOf(options));
+    requestKey(
+      (options.method || 'GET').toUpperCase(),
+      buildUrl(options),
+      acceptOf(options),
+      bodyKeyOf(options)
+    );
   io.buildUrl = buildUrl;
   io.IOError = IOError;
   io.FailedIO = FailedIO;

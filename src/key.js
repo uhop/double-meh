@@ -1,6 +1,53 @@
 // @ts-self-types="./key.d.ts"
 const noBody = {GET: 1, HEAD: 1, OPTIONS: 1};
 
+// safe and idempotent, so one decoded envelope may be shared: the rule track and cache opt in on.
+// QUERY (RFC 10008) is a read that carries its criteria in the body, which is why the body has to
+// reach the key for it and need not for the unsafe verbs, whose keys only a hand-over consults.
+export const safeMethods = {GET: 1, QUERY: 1};
+
+// FNV-1a, 32-bit: a cache discriminator, not a signature, so a sync non-cryptographic hash is the
+// right tool -- crypto.subtle is async and would push key building off the synchronous path
+const hash = text => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; ++i) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+};
+
+// only a value whose serialization is stable contributes: a stream cannot be read synchronously,
+// and a Blob or FormData would JSON.stringify to the same "{}" as any other, which is worse than
+// contributing nothing. Those cases declare a `variant` instead, or go unshared.
+const stableText = data => {
+  if (typeof data === 'string') return data;
+  if (typeof URLSearchParams !== 'undefined' && data instanceof URLSearchParams) {
+    return String(data);
+  }
+  if (Array.isArray(data)) return JSON.stringify(data);
+  if (data && typeof data === 'object') {
+    const proto = Object.getPrototypeOf(data);
+    if (proto === Object.prototype || proto === null) return JSON.stringify(data);
+    return undefined;
+  }
+  if (data === null || typeof data !== 'object') return JSON.stringify(data);
+  return undefined;
+};
+
+/**
+ * The body's contribution to the key: an explicit `variant` wherever it is given, and otherwise a
+ * hash of the request data for a safe method that carries one. An unsafe verb contributes nothing
+ * by default, because nothing shares it.
+ */
+export const bodyKeyOf = options => {
+  if (options.variant != null) return String(options.variant);
+  const method = (options.method || 'GET').toUpperCase();
+  if (!safeMethods[method] || noBody[method] || options.data === undefined) return undefined;
+  const text = stableText(options.data);
+  return text === undefined ? undefined : hash(text);
+};
+
 const base = () => (typeof location !== 'undefined' && location ? location.href : undefined);
 
 // resolution only — canonicalUrl additionally sorts the query and drops the hash, which is right
@@ -96,9 +143,10 @@ export const canonicalUrl = rawUrl => {
 const DEFAULT_ACCEPT = 'application/json';
 
 // the prepared default folds to the base key, so an explicit application/json and none are one identity
-export const requestKey = (method, url, accept) => {
-  const base = method.toUpperCase() + ' ' + canonicalUrl(url);
-  return accept && accept !== DEFAULT_ACCEPT ? base + ' accept=' + accept : base;
+export const requestKey = (method, url, accept, body) => {
+  let key = method.toUpperCase() + ' ' + canonicalUrl(url);
+  if (accept && accept !== DEFAULT_ACCEPT) key += ' accept=' + accept;
+  return body == null ? key : key + ' body=' + body;
 };
 
 // Request shares five property names with Options and disagrees on `cache` (`"default"` reads as

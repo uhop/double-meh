@@ -223,6 +223,17 @@ aborts when the last waiter leaves, and a signalless caller pins it to completio
 
 `{active, theDefault, deferred, flyByKey(key), fly(options), isFlying(options), optIn(options)}`
 
+QUERY (RFC 10008) is registered as a verb alongside the rest: `io.query(url, criteria)`, criteria
+in the body, not the query string. It is safe and idempotent, so `track` and `cache` opt in for it
+exactly as for GET -- `safeMethods` in `src/key.js` is the shared gate both read. Its identity
+therefore includes the body: `requestKey` takes a fourth component from `bodyKeyOf(options)`,
+which is `String(options.variant)` when given, otherwise a sync FNV-1a hash of stable request data
+(string, plain object, array, `URLSearchParams`) for a safe body-carrying method. An unsafe verb
+contributes no body component, because only a hand-over consults its key. A safe verb whose body
+has no stable serialization (stream, `Blob`, `FormData`) yields `undefined` and is refused by both
+`optIn`s, so it is never shared under a bodyless key. There is no automatic substitution of POST
+for QUERY where a server rejects it; a 405 surfaces as `BadStatus`. The bundler is still GET-only.
+
 ### io.cache — app-governed cache
 
 `io.cache.storage` defaults to `autoStorage(defaultCandidates)` from `src/storage/candidates.js`:

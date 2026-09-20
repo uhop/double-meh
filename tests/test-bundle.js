@@ -625,3 +625,54 @@ test('bundle streaming: the buffered inspector ignores a jsonl content type', as
     );
   });
 });
+
+test('bundle: the envelope verb is an option, defaulting to PUT', async t => {
+  const methods = [];
+  const record = () => request => {
+    methods.push(request.method);
+    if (new URL(request.url).pathname === '/bundle') {
+      return bundleResponse(
+        JSON.parse(request.body).parts.map(part => ({
+          id: part.id,
+          url: part.url,
+          status: 200,
+          headers: {'content-type': 'application/json'},
+          body: DATA[new URL(part.url).pathname]
+        }))
+      );
+    }
+    return json({miss: true});
+  };
+
+  t.equal(io.bundle.method, 'PUT', 'PUT by default');
+
+  serve(record());
+  io.bundle.url = BASE + '/bundle';
+  try {
+    await Promise.all([
+      io.get(BASE + '/a', null, {bundle: true}),
+      io.get(BASE + '/b', null, {bundle: true})
+    ]);
+    t.deepEqual(methods, ['PUT'], 'the envelope went as a PUT');
+  } finally {
+    io.bundle.url = '';
+    await reset();
+  }
+
+  methods.length = 0;
+  serve(record());
+  io.bundle.url = BASE + '/bundle';
+  io.bundle.method = 'QUERY';
+  try {
+    const [a] = await Promise.all([
+      io.get(BASE + '/a', null, {bundle: true}),
+      io.get(BASE + '/b', null, {bundle: true})
+    ]);
+    t.deepEqual(methods, ['QUERY'], 'and follows the option when changed');
+    t.deepEqual(a, DATA['/a'], 'the parts still resolve');
+  } finally {
+    io.bundle.method = 'PUT';
+    io.bundle.url = '';
+    await reset();
+  }
+});

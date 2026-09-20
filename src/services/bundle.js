@@ -128,10 +128,16 @@ export const installBundle = io => {
 
   const sendBuffered = async (cfg, waiters) => {
     try {
-      await io.put(
+      await io.full(
         cfg.url,
         {v: 1, parts: buildParts(waiters)},
-        {bundle: false, cache: false, accept: BUNDLE_MIME, headers: {'Content-Type': REQUEST_MIME}}
+        {
+          method: io.bundle.method,
+          bundle: false,
+          cache: false,
+          accept: BUNDLE_MIME,
+          headers: {'Content-Type': REQUEST_MIME}
+        }
       );
     } catch (error) {
       return void failAll(waiters, error);
@@ -143,10 +149,11 @@ export const installBundle = io => {
   const sendStreaming = async (cfg, waiters) => {
     let envelope;
     try {
-      envelope = await io.full.put(
+      envelope = await io.full(
         cfg.url,
         {v: 1, parts: buildParts(waiters)},
         {
+          method: io.bundle.method,
           bundle: false,
           cache: false,
           stream: true,
@@ -333,6 +340,11 @@ export const installBundle = io => {
 
   io.bundle = {
     url: '',
+    // the envelope's verb, and the only part of bundling an intermediary ever sees. PUT is the
+    // safe default: QUERY says what a bundle request is, a read of many resources, and would let
+    // an edge cache one -- but shared caches key on method and URI and do not partition on a
+    // body yet, so a deployment whose edge handles QUERY opts in instead of everyone paying
+    method: 'PUT',
     waitTime: 20,
     maxSize: 20,
     minSize: 2,

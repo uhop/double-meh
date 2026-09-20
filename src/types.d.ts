@@ -56,6 +56,12 @@ export interface Options {
     | 'octet'
     | (string & {});
   decode?: DecodeMode | ((response: Response, options: Options) => unknown);
+  /**
+   * States this request's identity where the body decides it and the bytes cannot: a streamed,
+   * `Blob`, or `FormData` body, or a `POST` hand-over that must not collide with another payload
+   * to the same URL. Two calls sharing a `variant` share a key.
+   */
+  variant?: string | number;
   ifMatch?: string;
   ifNoneMatch?: string;
   fields?: string[];
@@ -368,6 +374,8 @@ export interface BundlerConfig {
 }
 
 export interface Bundle {
+  /** The envelope's verb. Default `'PUT'`; `'QUERY'` where the edge understands it. */
+  method: string;
   /** The default bundler endpoint; bundling is inert until set (or a bundler is registered). */
   url: string;
   /** Auto-flush window of the default (anonymous) bundle, ms. */

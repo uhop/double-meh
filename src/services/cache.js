@@ -1,6 +1,6 @@
 // @ts-self-types="./cache.d.ts"
 import {CacheFull, nullBodyStatus} from '../envelope.js';
-import {canonicalUrl} from '../key.js';
+import {bodyKeyOf, canonicalUrl, safeMethods} from '../key.js';
 import {autoStorage} from '../storage/auto.js';
 import {defaultCandidates} from '../storage/candidates.js';
 
@@ -88,7 +88,11 @@ export const installCache = io => {
 
   const optIn = options => {
     if (options.stream || options.bust) return false;
-    if ((options.method || 'GET').toUpperCase() !== 'GET') return false;
+    const method = (options.method || 'GET').toUpperCase();
+    if (!safeMethods[method]) return false;
+    // a safe method that carries its criteria in the body is identified by that body; with no
+    // usable key it must not share a bodyless one, so it opts out instead
+    if (method !== 'GET' && bodyKeyOf(options) === undefined) return false;
     if (options.cache !== undefined) return !!options.cache;
     const d = io.cache.theDefault;
     return typeof d === 'function' ? !!d(options) : !!d;
