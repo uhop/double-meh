@@ -8,6 +8,8 @@ npm i double-meh
 
 ESM-only. CJS consumers can `require('double-meh')` on Node >= 20.19 (`require(esm)`); the module graph carries no top-level await, which is what keeps that path synchronous.
 
+No build step is required in a browser: vendor `src` and map the package with two import-map entries, `"double-meh"` to `index.js` and `"double-meh/"` to the folder — one prefix covers every subpath because the wildcard does not transform. The full entry is 18 modules and 3 graph levels; verbs alone (`io.js` plus `transports/fetch.js`) are 4 modules, which is smaller over the wire than the whole entry bundled and minified.
+
 ## Quick start
 
 ```js
@@ -28,7 +30,7 @@ The `exports` map is `{".": "./src/index.js", "./*": "./src/*"}` — a non-trans
 subpath imports carry the `.js` extension.
 
 - `double-meh` — the shared, fully configured instance (default export) plus every named export.
-- `double-meh/io.js` — `createIO()`, the bare pipeline with no services attached.
+- `double-meh/io.js` — `createIO()`, the bare pipeline with no services attached. Its default export is an instance with no transport registered either, so a consumer assembling its own must `registerTransport('fetch', fetchTransport)` and set `defaultTransport` before the first request; install services in the order `index.js` uses (track before cache, which shares the envelope track holds), each install call followed by its `attach()`.
 - `double-meh/transports/fetch.js` — `fetchTransport`, the one core transport.
 - `double-meh/services/{track,cache,retry,mock,bundle}.js` — `installTrack`, `installCache`, `installRetry`, `installMock`, `installBundle`.
 - `double-meh/storage/{memory,fs,sqlite,cache-api,indexed-db,web-storage,opfs}.js` — cache backends: `memoryStorage`, `fsStorage`, `sqliteStorage`, `cacheApiStorage`, `indexedDbStorage`, `webStorage` (takes `store` — `sessionStorage` by default — and uses `name` as a key prefix, being the only backend with no container of its own), `opfsStorage` (origin private file system; bytes, no encoding, origin-pool quota; `keys()` opens every entry, and `createWritable()` on the main thread is Safari 26).

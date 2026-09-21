@@ -111,6 +111,11 @@ npm i double-meh
 
 ESM-only. CJS consumers can `require('double-meh')` on Node ≥ 20.19 (`require(esm)`).
 
+No build step? The package ships source, so a page can serve it directly: vendor `src`, add a
+two-entry import map, and import as usual. See
+[no-build browser pages](https://github.com/uhop/double-meh/wiki/Cookbook%3A-no-build-browser-pages)
+for the recipe, what it costs, and when to bundle instead.
+
 ## Documentation
 
 The canonical documentation lives in the
