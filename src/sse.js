@@ -43,6 +43,8 @@ export const installSse = io => {
     delete base.reconnect;
     delete base.lastEventId;
     const lenient = base.ignoreBadStatus === true;
+    const isFatal = error =>
+      isAbort(error) || (base.signal && base.signal.aborted) || reconnect === false;
     return (async function* () {
       let delay = typeof reconnect === 'number' ? reconnect : io.sse.reconnectDelay;
       for (;;) {
@@ -55,9 +57,7 @@ export const installSse = io => {
         try {
           envelope = await io.full(url, data, options);
         } catch (error) {
-          if (isAbort(error) || (base.signal && base.signal.aborted) || reconnect === false) {
-            throw error;
-          }
+          if (isFatal(error)) throw error;
           await sleep(delay, base.signal); // a network failure reconnects, EventSource-style
           continue;
         }
@@ -109,9 +109,7 @@ export const installSse = io => {
               }
             }
           } catch (error) {
-            if (isAbort(error) || (base.signal && base.signal.aborted) || reconnect === false) {
-              throw error;
-            }
+            if (isFatal(error)) throw error;
             // a dropped stream falls through to the reconnect path
           }
         }
